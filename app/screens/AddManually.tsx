@@ -9,32 +9,35 @@ import {
   Alert,
   Dimensions,
   StyleSheet,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { createBusinessCard, CreateCardData } from '../lib/api';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const AddManually = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    fullName: '',
+  const [formData, setFormData] = useState<CreateCardData>({
+    name: '',
     jobTitle: '',
     company: '',
     notes: '',
     address: '',
-    work: '',
+    mobile: '',
     email: '',
     website: '',
   });
   const [displayData, setDisplayData] = useState({
-    fullName: '',
+    name: '',
     jobTitle: '',
   });
   const [isEdited, setIsEdited] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: keyof CreateCardData, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -42,23 +45,39 @@ const AddManually = () => {
     setIsEdited(true);
   };
 
-  const handleSave = () => {
-    if (!formData.fullName.trim()) {
+  const handleSave = async () => {
+    if (!formData.name.trim()) {
       Alert.alert('Required Field', 'Please enter the full name');
       return;
     }
-    setDisplayData({
-      fullName: formData.fullName,
-      jobTitle: formData.jobTitle,
-    });
-    setIsEdited(false);
-    // Here you would typically save the data to your backend/storage
-    console.log('Saving form data:', formData);
+
+    try {
+      setIsSubmitting(true);
+      console.log('Attempting to save business card with data:', formData);
+      const savedCard = await createBusinessCard(formData);
+      console.log('Successfully saved card:', savedCard);
+      setDisplayData({
+        name: savedCard.name,
+        jobTitle: savedCard.job_title || '',
+      });
+      setIsEdited(false);
+      Alert.alert('Success', 'Business card saved successfully');
+      router.back();
+    } catch (error) {
+      console.error('Error saving business card:', error);
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to save business card. Please check your connection and try again.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" backgroundColor="black" />
+      <StatusBar style="light" />
+      <View style={styles.statusBarBackground} />
       <View style={styles.mainContainer}>
         {/* Teal Container Section */}
         <View style={[styles.tealContainer, { height: SCREEN_HEIGHT * 0.45 }]}>
@@ -75,7 +94,7 @@ const AddManually = () => {
           {/* Centered Text */}
           <View style={styles.headerContent}>
             <Text style={styles.headerTitle}>
-              {displayData.fullName || 'Add Contact'}
+              {displayData.name || 'Add Contact'}
             </Text>
             <Text style={styles.headerSubtitle}>
               {displayData.jobTitle || 'Enter Job Title'}
@@ -139,8 +158,8 @@ const AddManually = () => {
               <TextInput
                 placeholder="Enter full name"
                 style={styles.input}
-                value={formData.fullName}
-                onChangeText={(text) => handleInputChange('fullName', text)}
+                value={formData.name}
+                onChangeText={(text) => handleInputChange('name', text)}
               />
             </View>
 
@@ -175,12 +194,12 @@ const AddManually = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Work</Text>
+              <Text style={styles.label}>Mobile</Text>
               <TextInput
-                placeholder="Enter work details"
+                placeholder="Enter mobile number"
                 style={styles.input}
-                value={formData.work}
-                onChangeText={(text) => handleInputChange('work', text)}
+                value={formData.mobile}
+                onChangeText={(text) => handleInputChange('mobile', text)}
               />
             </View>
 
@@ -216,10 +235,13 @@ const AddManually = () => {
               <Text style={styles.editButtonText}>Edit Details</Text>
             </TouchableOpacity>
             <TouchableOpacity 
-              style={styles.saveButton}
+              style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
               onPress={handleSave}
+              disabled={isSubmitting}
             >
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Text style={styles.saveButtonText}>
+                {isSubmitting ? 'Saving...' : 'Save'}
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -231,6 +253,10 @@ const AddManually = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#00A693',
+  },
+  statusBarBackground: {
+    height: Platform.OS === 'android' ? 24 : 0,
     backgroundColor: '#00A693',
   },
   mainContainer: {
@@ -391,6 +417,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 1.41,
     elevation: 2,
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#E5E7EB',
   },
   saveButtonText: {
     color: 'white',
