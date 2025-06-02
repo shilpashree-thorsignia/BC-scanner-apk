@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Calendar } from 'react-native-calendars';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 
 interface ProfileData {
   name: string;
@@ -36,6 +37,7 @@ interface DayObject {
 const EditProfileScreen: React.FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isDark, colors } = useTheme();
   const [profileData, setProfileData] = useState<ProfileData>({
     name: 'Name',
     email: 'Email',
@@ -120,16 +122,19 @@ const EditProfileScreen: React.FC = () => {
     <KeyboardAvoidingView 
       style={[
         styles.container,
-        { paddingTop: Platform.OS === 'ios' ? insets.top : 25 }
+        { 
+          paddingTop: Platform.OS === 'ios' ? insets.top : 25,
+          backgroundColor: isDark ? colors.background : 'white' 
+        }
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="black" />
+          <Ionicons name="arrow-back" size={24} color={isDark ? '#fff' : 'black'} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <Text style={[styles.headerTitle, { color: isDark ? '#fff' : 'black' }]}>Edit Profile</Text>
       </View>
 
       <ScrollView 
@@ -157,48 +162,66 @@ const EditProfileScreen: React.FC = () => {
 
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Name</Text>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Full Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { 
+                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
+                    color: isDark ? '#fff' : '#374151'
+                  }]}
                   value={profileData.name}
                   onChangeText={(text) => setProfileData({ ...profileData, name: text })}
-                  placeholder="Enter your name"
+                  placeholder="Enter your full name"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Email</Text>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Email</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { 
+                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
+                    color: isDark ? '#fff' : '#374151'
+                  }]}
                   value={profileData.email}
                   onChangeText={(text) => setProfileData({ ...profileData, email: text })}
                   placeholder="Enter your email"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Date of Birth</Text>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Date of Birth</Text>
                 <TouchableOpacity 
-                  style={styles.dateButton}
+                  style={[styles.dateButton, { 
+                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white'
+                  }]}
                   onPress={() => {
                     Keyboard.dismiss();
                     setShowCalendar(true);
                   }}
                 >
-                  <Text style={styles.dateText}>{profileData.dateOfBirth}</Text>
-                  <Ionicons name="calendar" size={20} color="#8AC041" />
+                  <Text style={[styles.dateText, { color: isDark ? '#fff' : '#374151' }]}>{profileData.dateOfBirth}</Text>
+                  <Ionicons name="calendar" size={20} color={isDark ? '#fff' : '#374151'} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Country/Region</Text>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Country/Region</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { 
+                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
+                    color: isDark ? '#fff' : '#374151'
+                  }]}
                   value={profileData.region}
                   onChangeText={(text) => setProfileData({ ...profileData, region: text })}
                   placeholder="Enter your location"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
                 />
               </View>
 
@@ -221,20 +244,20 @@ const EditProfileScreen: React.FC = () => {
         <TouchableWithoutFeedback onPress={() => setShowCalendar(false)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <View style={styles.calendarContainer}>
+              <View style={[styles.calendarContainer, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
                 <Calendar
                   onDayPress={handleDateSelect}
                   maxDate={new Date().toISOString().split('T')[0]}
                   markedDates={{
                     [profileData.dateOfBirth.split('/').reverse().join('-')]: {
                       selected: true,
-                      selectedColor: '#8AC041',
+                      selectedColor: isDark ? '#fff' : '#8AC041',
                     },
                   }}
                   theme={{
-                    selectedDayBackgroundColor: '#8AC041',
-                    todayTextColor: '#8AC041',
-                    arrowColor: '#8AC041',
+                    selectedDayBackgroundColor: isDark ? '#fff' : '#8AC041',
+                    todayTextColor: isDark ? '#fff' : '#8AC041',
+                    arrowColor: isDark ? '#fff' : '#8AC041',
                   }}
                 />
               </View>
@@ -249,7 +272,6 @@ const EditProfileScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
   },
   header: {
     flexDirection: 'row',

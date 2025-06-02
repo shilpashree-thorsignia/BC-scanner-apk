@@ -130,8 +130,8 @@ export default function SettingsScreen() {
           showsVerticalScrollIndicator={false}
         >
           <SectionHeader title="GENERAL" />
-          <ListItem title="User ID" onPress={() => {}} />
-          <ListItem title="Language" onPress={() => {}} />
+          {/* <ListItem title="User ID" onPress={() => {}} />
+          <ListItem title="Language" onPress={() => {}} /> */}
           <ListItem 
             title="Dark theme" 
             onPress={() => {}}
@@ -139,8 +139,8 @@ export default function SettingsScreen() {
             toggleValue={isDark}
             onToggleChange={toggleTheme}
           />
-          <ListItem title="Fix name capitalization" onPress={() => {}} />
-          <ListItem title="Prompt for card sharing" onPress={() => {}} />
+          {/* <ListItem title="Fix name capitalization" onPress={() => {}} /> */}
+          {/* <ListItem title="Prompt for card sharing" onPress={() => {}} /> */}
           <ListItem title="Edit groups" onPress={() => {}} />
           <ListItem 
             title={isExporting ? "Exporting..." : "Export all cards"} 
@@ -148,17 +148,17 @@ export default function SettingsScreen() {
             disabled={isExporting}
             rightElement={isExporting ? <ActivityIndicator size="small" color={colors.accent} /> : undefined}
           />
-          <ListItem title="AI Integration" onPress={() => {}} />
-          <ListItem title="Configure webbook" onPress={() => {}} />
+          {/* <ListItem title="AI Integration" onPress={() => {}} /> */}
+          {/* <ListItem title="Configure webbook" onPress={() => {}} /> */}
 
-          <SectionHeader title="BUSINESS" />
+          {/* <SectionHeader title="BUSINESS" />
           <ListItem title="Integrations" onPress={() => {}} />
           <ListItem title="Team Collaboration" onPress={() => {}} />
           <ListItem title="Scan for Business" onPress={() => {}} />
 
           <SectionHeader title="OTHER" />
           <ListItem title="FAQ" onPress={() => {}} />
-          <ListItem title="Contact support" onPress={() => {}} />
+          <ListItem title="Contact support" onPress={() => {}} /> */}
 
           {/* Bottom padding to ensure last items are visible */}
           <View style={styles.bottomPadding} />

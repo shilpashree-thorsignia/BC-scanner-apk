@@ -14,9 +14,11 @@ import { useRouter } from 'expo-router';
 import HamburgerScreen from './HamburgerScreen';
 import { getAllBusinessCards, BusinessCard } from '../lib/api';
 import BusinessCardList from '../components/BusinessCardList';
+import { useTheme } from '../context/ThemeContext';
 
 const NavbarScreen: React.FC = () => {
   const router = useRouter();
+  const { isDark, colors } = useTheme();
   const [isHamburgerVisible, setIsHamburgerVisible] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
   const [activeTab, setActiveTab] = useState('home');
@@ -45,20 +47,20 @@ const NavbarScreen: React.FC = () => {
   };
 
   const TopBar = () => (
-    <View style={styles.topBar}>
+    <View style={[styles.topBar, { backgroundColor: isDark ? colors.background : '#fff' }]}>
       <View style={styles.topBarContent}>
         <TouchableOpacity
           style={styles.hamburgerButton}
           onPress={() => setIsHamburgerVisible(true)}
         >
-          <Ionicons name="menu-outline" size={24} color="#666" />
+          <Ionicons name="menu-outline" size={24} color={isDark ? '#fff' : '#666'} />
         </TouchableOpacity>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search-outline" size={20} color="#666" style={styles.searchIcon} />
+        <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6' }]}>
+          <Ionicons name="search-outline" size={20} color={isDark ? '#fff' : '#666'} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: isDark ? '#fff' : '#1f2937' }]}
             placeholder="Search Cards"
-            placeholderTextColor="#999"
+            placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#999'}
           />
         </View>
       </View>
@@ -143,9 +145,9 @@ const NavbarScreen: React.FC = () => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" translucent />
-      <View style={styles.content}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.background : '#f8f9fa' }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={isDark ? colors.background : '#f8f9fa'} translucent />
+      <View style={[styles.content, { backgroundColor: isDark ? colors.background : '#f8f9fa' }]}>
         <TopBar />
         
         {cards.length === 0 && !loading ? (
@@ -162,7 +164,6 @@ const NavbarScreen: React.FC = () => {
             cards={cards}
             onRefresh={loadCards}
             refreshing={loading}
-            onFilterChange={handleFilterChange}
           />
         )}
         
@@ -179,7 +180,6 @@ const NavbarScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
   },
   content: {
     flex: 1,
@@ -250,7 +250,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: '#666',
     textAlign: 'center',
   },
 });

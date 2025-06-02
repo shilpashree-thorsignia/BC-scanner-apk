@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTheme } from '../context/ThemeContext';
 
 const MENU_WIDTH = Dimensions.get('window').width * 0.85;
 
@@ -35,6 +36,7 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const slideAnim = useRef(new Animated.Value(-MENU_WIDTH)).current;
   const router = useRouter();
+  const { isDark, colors } = useTheme();
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -46,7 +48,7 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
 
   const MenuItem = ({ icon, title, hasArrow, isLogout, onPress, hasSwitch }: MenuItemProps) => (
     <TouchableOpacity
-      style={styles.menuItem}
+      style={[styles.menuItem, { borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : '#F0F0F0' }]}
       onPress={() => {
         onPress?.();
         onClose();
@@ -66,7 +68,7 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
         </View>
         <Text style={[
           styles.menuItemText,
-          isLogout ? styles.logoutText : null
+          isLogout ? styles.logoutText : { color: isDark ? '#fff' : '#1F2937' }
         ]}>
           {title}
         </Text>
@@ -79,7 +81,7 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
           thumbColor="#f4f3f4"
         />
       )}
-      {hasArrow && <Ionicons name="chevron-forward" size={20} color="#666" />}
+      {hasArrow && <Ionicons name="chevron-forward" size={20} color={isDark ? '#fff' : '#666'} />}
     </TouchableOpacity>
   );
 
@@ -99,27 +101,30 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
         <Animated.View
           style={[
             styles.menu,
-            { transform: [{ translateX: slideAnim }] },
+            { 
+              transform: [{ translateX: slideAnim }],
+              backgroundColor: isDark ? colors.background : 'white' 
+            },
           ]}
         >
           {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity onPress={onClose}>
-              <Ionicons name="arrow-back" size={24} color="#000" />
+              <Ionicons name="arrow-back" size={24} color={isDark ? '#fff' : '#000'} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Profile</Text>
+            <Text style={[styles.headerTitle, { color: isDark ? '#fff' : '#000' }]}>Profile</Text>
             <View style={styles.headerIcons}>
               <TouchableOpacity style={styles.headerIcon}>
-                <Ionicons name="search" size={24} color="#000" />
+                <Ionicons name="search" size={24} color={isDark ? '#fff' : '#000'} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.headerIcon}>
-                <Ionicons name="notifications-outline" size={24} color="#000" />
+                <Ionicons name="notifications-outline" size={24} color={isDark ? '#fff' : '#000'} />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Main Section */}
-          <View style={styles.profileSection}>
+          <View style={[styles.profileSection, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#F9F9F9' }]}>
             <View style={styles.avatarContainer}>
               {logoPath ? (
                 <Image source={{ uri: logoPath }} style={styles.avatar} />
@@ -132,10 +137,10 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
                 <View style={styles.checkmarkContainer}>
                   <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
                 </View>
-                <Text style={styles.name}>Thor Signia</Text>
+                <Text style={[styles.name, { color: isDark ? '#fff' : '#000' }]}>Thor Signia</Text>
               </View>
               <View style={styles.locationContainer}>
-                <Ionicons name="location" size={16} color="#4CAF50" />
+                <Ionicons name="location-outline" size={14} color="#4CAF50" />
                 <Text style={styles.location}>Bengaluru</Text>
               </View>
             </View>
@@ -221,7 +226,6 @@ const styles = StyleSheet.create({
     top: 0,
     height: '100%',
     width: MENU_WIDTH,
-    backgroundColor: 'white',
     padding: 16,
     paddingTop: 40,
     shadowColor: '#000',
@@ -252,7 +256,6 @@ const styles = StyleSheet.create({
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9F9F9',
     borderRadius: 12,
     padding: 12,
     marginTop: 16,
@@ -321,7 +324,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   menuItemLeft: {
     flexDirection: 'row',
@@ -343,11 +345,10 @@ const styles = StyleSheet.create({
   menuItemText: {
     marginLeft: 12,
     fontSize: 16,
-    color: '#1F2937',
   },
   logoutText: {
     color: '#FF4444',
   },
 });
 
-export default HamburgerScreen; 
+export default HamburgerScreen;

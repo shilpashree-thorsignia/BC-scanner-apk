@@ -6,6 +6,7 @@ import type { CameraCapturedPicture } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { getResponsiveData, scaleSize } from '../../constants/responsive';
 import { scanBusinessCard, createBusinessCard } from '../lib/api';
+import { useTheme } from '../context/ThemeContext';
 
 // Define BusinessCard type locally if the import is not available
 type BusinessCard = {
@@ -210,9 +211,10 @@ export default function ScannerScreen() {
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualNameInput, setManualNameInput] = useState<string>('');
+  const router = useRouter();
+  const { isDark, colors } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const router = useRouter();
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
   
   // Update dimensions when screen size changes
@@ -471,7 +473,7 @@ export default function ScannerScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.background : '#00A99D' }]}>
       <View style={styles.cameraContainer}>
         {/* Camera View without children */}
         <CameraView

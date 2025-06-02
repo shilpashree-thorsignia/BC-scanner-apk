@@ -50,10 +50,8 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
     }
   };
 
-  // Split name into parts if possible (assuming first name and surname)
-  const nameParts = item.name ? item.name.split(' ') : ['Not', 'Provided'];
-  const firstName = nameParts.length > 0 ? nameParts[0] : 'Not';
-  const surname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Provided';
+  // Use full name instead of splitting it
+  const fullName = item.name || 'Not Provided';
 
   // Format the created date
   const formatDate = (dateString: string) => {
@@ -74,23 +72,21 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
   
   const createdDate = formatDate(item.created_at);
 
-  // Create QR code value with available data
   const qrValue = `MECARD:N:${item.name || 'Not Provided'};${item.mobile ? 'TEL:' + item.mobile + ';' : ''}${item.email ? 'EMAIL:' + item.email + ';' : ''}${item.website ? 'URL:' + item.website + ';' : ''}${item.address ? 'ADR:' + item.address + ';' : ''}`;
 
   return (
     <View style={styles.cardContainer}>
       <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}>
         <View style={styles.cardContent}>
-          {/* Top Section - Name and Title */}
           <View style={styles.topSection}>
             <View style={styles.nameAndTitleSection}>
-              <Text style={[styles.name, { color: colors.text }]}>{firstName}</Text>
-              <Text style={[styles.surname, { color: colors.text }]}>{surname}</Text>
-              <Text style={[styles.jobTitle, { color: colors.secondaryText }]}>{item.job_title || 'Not provided'}</Text>
+              <View style={styles.nameContainer}>
+                <Text style={[styles.name, { color: isDark ? '#fff' : colors.text }]} numberOfLines={1} ellipsizeMode="tail">{fullName}</Text>
+              </View>
+              <Text style={[styles.jobTitle, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.job_title || 'Not provided'}</Text>
             </View>
-            {/* Created Date and QR Code */}
-            <View style={styles.dateAndQrContainer}>
-              <Text style={[styles.dateText, { color: colors.secondaryText }]}>{createdDate}</Text>
+            <View style={[styles.dateAndQrContainer, { backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)' }]}>
+              <Text style={[styles.dateText, { color: isDark ? '#fff' : colors.secondaryText }]}>{createdDate}</Text>
               <View style={styles.qrCodeContainer}>
                 <QRCode
                   value={qrValue}
@@ -100,56 +96,48 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
                 />
               </View>
               <View style={styles.qrTextContainer}>
-                <Text style={[styles.qrHeaderText, { color: colors.secondaryText }]}>Connect</Text>
-                <Text style={[styles.qrSubText, { color: colors.secondaryText }]}>Access to tools & resources</Text>
+                <Text style={[styles.qrHeaderText, { color: isDark ? '#fff' : colors.secondaryText }]}>Connect</Text>
+                <Text style={[styles.qrSubText, { color: isDark ? '#fff' : colors.secondaryText }]}>Access to tools & resources</Text>
               </View>
             </View>
           </View>
 
-          {/* Middle Section - Contact and Quote */}
           <View style={styles.middleSection}>
-            {/* Contact and Quote */}
             <View style={styles.contentSection}>
               <View style={styles.contactSection}>
-                <Text style={[styles.email, { color: colors.secondaryText }]}>{item.email || 'Email not provided'}</Text>
-                <Text style={[styles.phone, { color: colors.secondaryText }]}>{item.mobile || 'Phone not provided'}</Text>
-                {item.company && <Text style={[styles.company, { color: colors.secondaryText }]}>{item.company}</Text>}
-                {item.website && <Text style={styles.website}>{item.website}</Text>}
+                <Text style={[styles.email, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.email || 'Email not provided'}</Text>
+                <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.mobile || 'Phone not provided'}</Text>
+                {item.company && <Text style={[styles.company, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.company}</Text>}
+                {item.website && <Text style={[styles.website, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.website}</Text>}
+                {item.address && <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.address}</Text>}
               </View>
               <View style={styles.quoteSection}>
-                <Text style={styles.quoteText}>
+                <Text style={[styles.quoteText, { color: isDark ? '#fff' : colors.secondaryText }]}>
                   {item.notes || "No additional notes provided"}
                 </Text>
               </View>
             </View>
-            
-            {/* We've moved the QR code section to the top right */}
           </View>
 
-          {/* Horizontal green line */}
           <View style={styles.horizontalGreenLine} />
 
-          {/* Bottom Section - Logos and WhatsApp */}
           <View style={styles.bottomSection}>
             <View style={styles.bottomLeftSection}>
-              {/* Thor Signia Logo with tagline */}
               <View style={styles.thorContainer}>
                 <View style={styles.thorTitleContainer}>
-                  <Text style={styles.thorPrefix}>Thor</Text>
-                  <Text style={styles.thorSuffix}>Signia</Text>
+                  <Text style={[styles.thorPrefix, { color: isDark ? '#fff' : undefined }]}>Thor</Text>
+                  <Text style={[styles.thorSuffix, { color: isDark ? '#fff' : undefined }]}>Signia</Text>
                 </View>
-                <Text style={styles.thorTagline}>Committed Towards Progress</Text>
+                <Text style={[styles.thorTagline, { color: isDark ? '#fff' : undefined }]}>Committed Towards Progress</Text>
               </View>
               
-              {/* ATSAIC text */}
-              <Text style={styles.atsaicText}>ATSAIC</Text>
+              <Text style={[styles.atsaicText, { color: isDark ? '#fff' : undefined }]}>ATSAIC</Text>
             </View>
-            <Text style={styles.connectWhatsApp}>Connect on WhatsApp</Text>
+            <Text style={[styles.connectWhatsApp, { color: isDark ? '#fff' : undefined }]}>Connect on WhatsApp</Text>
           </View>
         </View>
       </View>
       
-      {/* Action buttons below the card */}
       <View style={styles.actionButtonsContainer}>
         <TouchableOpacity
           onPress={handleWhatsApp}
@@ -176,7 +164,6 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
   );
 };
 
-// Define filter options as a type
 type FilterOption = 'all' | 'today' | 'week' | 'month';
 
 interface BusinessCardListProps {
@@ -186,7 +173,6 @@ interface BusinessCardListProps {
   filter?: FilterOption;
 }
 
-// Filter option component
 interface FilterOptionProps {
   label: string;
   value: FilterOption;
@@ -222,14 +208,12 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
   refreshing = false,
 }) => {
   const { colors } = useTheme();
-  // State for the current filter
   const [currentFilter, setCurrentFilter] = useState<FilterOption>('all');
   
-  // Handle filter change
   const handleFilterChange = (filter: FilterOption) => {
     setCurrentFilter(filter);
   };
-  // Function to filter cards based on the selected filter
+
   const getFilteredCards = () => {
     if (currentFilter === 'all') {
       return cards;
@@ -243,17 +227,14 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
       
       switch (currentFilter) {
         case 'today':
-          // Cards created today
           return cardDate >= today;
         
         case 'week':
-          // Cards created in the last 7 days
           const weekAgo = new Date(now);
           weekAgo.setDate(now.getDate() - 7);
           return cardDate >= weekAgo;
         
         case 'month':
-          // Cards created in the last 30 days
           const monthAgo = new Date(now);
           monthAgo.setDate(now.getDate() - 30);
           return cardDate >= monthAgo;
@@ -264,13 +245,12 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
     });
   };
   
-  // Get filtered cards based on the current filter
   const filteredCards = getFilteredCards();
   
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Filter options */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterContainer, { backgroundColor: colors.cardBackground }]}>
+      <View style={[styles.filterContainer, { backgroundColor: colors.cardBackground }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollContent}>
         <FilterOptionButton 
           label="All Cards" 
           value="all" 
@@ -295,8 +275,8 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
           isActive={currentFilter === 'month'} 
           onPress={handleFilterChange} 
         />
-      </ScrollView>
-      
+        </ScrollView>
+      </View>
       <FlatList
         data={filteredCards}
         renderItem={({ item }) => <BusinessCardComponent item={item} />}
@@ -318,7 +298,6 @@ const styles = StyleSheet.create({
     padding: 4,
     alignItems: 'center',
     width: 80,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: 4,
   },
   dateText: {
@@ -333,17 +312,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   filterContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  filterOption: {
+  filterScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
+    paddingVertical: 12,
+  },
+  filterOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 6,
     backgroundColor: '#f3f4f6',
   },
   activeFilterOption: {
@@ -394,21 +377,27 @@ const styles = StyleSheet.create({
   },
   topSection: {
     marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   nameAndTitleSection: {
     flex: 1,
+    paddingRight: 8,
+    justifyContent: 'center',
+    maxWidth: '65%',
+  },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   name: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
     color: '#000',
-    lineHeight: 18,
-  },
-  surname: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000',
-    lineHeight: 18,
+    lineHeight: 24,
+    flexShrink: 1,
+    width: '100%',
+    flexWrap: 'nowrap',
   },
   jobTitle: {
     fontSize: 10,
