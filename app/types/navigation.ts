@@ -9,4 +9,8 @@ declare global {
   namespace ReactNavigation {
     interface RootParamList extends RootStackParamList {}
   }
-} 
+}
+
+// Default export for Expo Router
+const NavigationTypes = {};
+export default NavigationTypes;

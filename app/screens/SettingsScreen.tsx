@@ -1,24 +1,30 @@
-import React from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
+import { getAllBusinessCards } from '../lib/api';
+import { exportBusinessCards } from '../utils/exportCards';
 
 interface ListItemProps {
   title: string;
   onPress: () => void;
+  disabled?: boolean;
+  rightElement?: React.ReactNode;
 }
 
 interface SectionHeaderProps {
   title: string;
 }
 
-const ListItem: React.FC<ListItemProps> = ({ title, onPress }) => (
+const ListItem: React.FC<ListItemProps> = ({ title, onPress, disabled, rightElement }) => (
   <TouchableOpacity 
     style={styles.listItem} 
     onPress={onPress}
+    disabled={disabled}
   >
     <Text style={styles.listItemText}>{title}</Text>
+    {rightElement}
     <Ionicons name="chevron-forward-outline" size={24} color="#CCCCCC" />
   </TouchableOpacity>
 );
@@ -29,9 +35,45 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => (
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleBack = () => {
     router.back();
+  };
+
+  const handleExportAllCards = async () => {
+    try {
+      setIsExporting(true);
+      console.log('Starting export process...');
+      
+      // Fetch all business cards
+      console.log('Fetching business cards...');
+      const cards = await getAllBusinessCards();
+      console.log(`Retrieved ${cards.length} business cards`);
+      
+      if (cards.length === 0) {
+        Alert.alert('No Cards', 'There are no business cards to export.');
+        return;
+      }
+      
+      // Export the business cards
+      console.log('Generating PDF and sharing...');
+      await exportBusinessCards(cards);
+      console.log('Export completed successfully');
+      
+    } catch (error) {
+      // Log detailed error information
+      console.error('Error exporting cards:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Show user-friendly error message
+      Alert.alert(
+        'Export Failed',
+        'There was an error exporting your business cards. Please check the console for details.'
+      );
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -65,7 +107,12 @@ export default function SettingsScreen() {
           <ListItem title="Fix name capitalization" onPress={() => {}} />
           <ListItem title="Prompt for card sharing" onPress={() => {}} />
           <ListItem title="Edit groups" onPress={() => {}} />
-          <ListItem title="Export all cards" onPress={() => {}} />
+          <ListItem 
+            title={isExporting ? "Exporting..." : "Export all cards"} 
+            onPress={handleExportAllCards}
+            disabled={isExporting}
+            rightElement={isExporting ? <ActivityIndicator size="small" color="#4CAF50" /> : undefined}
+          />
           <ListItem title="AI Integration" onPress={() => {}} />
           <ListItem title="Configure webbook" onPress={() => {}} />
 

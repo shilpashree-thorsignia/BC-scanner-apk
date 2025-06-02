@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://192.168.1.21:8000/api';
+const API_BASE_URL = 'http://192.168.1.30:8000/api';
 
 export interface BusinessCard {
   id: number;
@@ -91,13 +91,35 @@ export const createBusinessCard = async (data: CreateCardData): Promise<Business
 
 export const getAllBusinessCards = async (): Promise<BusinessCard[]> => {
   try {
+    console.log(`Fetching business cards from ${API_BASE_URL}/business-cards/`);
+    
     const response = await fetch(`${API_BASE_URL}/business-cards/`);
+    
+    console.log('Response status:', response.status);
+    console.log('Response headers:', JSON.stringify(response.headers));
+    
     if (!response.ok) {
-      throw new Error('Failed to fetch business cards');
+      const errorText = await response.text();
+      console.error('Error response body:', errorText);
+      throw new Error(`Failed to fetch business cards: ${response.status} ${response.statusText}`);
     }
-    return response.json();
+    
+    const data = await response.json();
+    console.log(`Successfully retrieved ${data.length} business cards`);
+    return data;
   } catch (error) {
     console.error('Error fetching business cards:', error);
+    if (error instanceof TypeError && error.message.includes('Network request failed')) {
+      console.error('Network error - check if the server is running and accessible');
+    }
     throw error;
   }
-}; 
+};
+
+const api = {
+  scanBusinessCard,
+  createBusinessCard,
+  getAllBusinessCards
+};
+
+export default api;

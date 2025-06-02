@@ -6,10 +6,9 @@ import {
   TouchableOpacity,
   Linking,
   Share,
-  Image,
   FlatList,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BusinessCard as BusinessCardType } from '../lib/api';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -42,66 +41,99 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
   };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <View style={styles.mainContent}>
-            <View style={styles.nameSection}>
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.jobTitle}>{item.job_title || ''}</Text>
-            </View>
-            <View style={styles.contactInfo}>
-              <Text style={styles.email}>{item.email}</Text>
-              <Text style={styles.phone}>{item.mobile}</Text>
+    <View style={styles.cardContainer}>
+      <View style={styles.card}>
+        <View style={styles.cardContent}>
+          {/* Top Section - Name and Title */}
+          <View style={styles.topSection}>
+            <View style={styles.nameAndTitleSection}>
+              <Text style={styles.name}>Kiran Kumar</Text>
+              <Text style={styles.surname}>Sundarshan</Text>
+              <Text style={styles.jobTitle}>Director</Text>
             </View>
           </View>
-          <View style={styles.qrContainer}>
-            <QRCode
-              value={`MECARD:N:${item.name};TEL:${item.mobile || ''};EMAIL:${item.email || ''};URL:${item.website || ''};NOTE:${item.job_title || ''};`}
-              size={65}
-              color="black"
-              backgroundColor="white"
-            />
-            <Text style={styles.qrText}>Connect on WhatsApp</Text>
+
+          {/* Middle Section - Contact, Quote and QR */}
+          <View style={styles.middleSection}>
+            {/* Left side - Contact and Quote */}
+            <View style={styles.leftSection}>
+              <View style={styles.contactSection}>
+                <Text style={styles.email}>kirankumar@thorsignia.online</Text>
+                <Text style={styles.phone}>+91 7587 196 571</Text>
+              </View>
+              <View style={styles.quoteSection}>
+                <Text style={styles.quoteText}>
+                  "I help businesses like <Text style={styles.highlightGreen}>yours</Text> scale and <Text style={styles.highlightTeal}>succeed</Text>{"\nwith GTM strategy, innovative development, and\nAI-driven automation."}
+                </Text>
+              </View>
+            </View>
+            
+            {/* Vertical dotted line */}
+            <View style={styles.verticalDottedLine} />
+
+            {/* Right side - QR Code */}
+            <View style={styles.qrSection}>
+              <View style={styles.qrHeader}>
+                <Text style={styles.qrHeaderText}>Connect</Text>
+                <MaterialIcons name="keyboard-arrow-down" size={12} color="#4B5563" />
+              </View>
+              <Text style={styles.qrSubText}>Access to tools & resources</Text>
+              <View style={styles.qrCodeContainer}>
+                <QRCode
+                  value={`MECARD:N:Kiran Kumar Sundarshan;TEL:+91 7587 196 571;EMAIL:kirankumar@thorsignia.online;`}
+                  size={64}
+                  color="black"
+                  backgroundColor="white"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Horizontal green line */}
+          <View style={styles.horizontalGreenLine} />
+
+          {/* Bottom Section - Logos and WhatsApp */}
+          <View style={styles.bottomSection}>
+            <View style={styles.bottomLeftSection}>
+              {/* Thor Signia Logo with tagline */}
+              <View style={styles.thorContainer}>
+                <View style={styles.thorTitleContainer}>
+                  <Text style={styles.thorPrefix}>Thor</Text>
+                  <Text style={styles.thorSuffix}>Signia</Text>
+                </View>
+                <Text style={styles.thorTagline}>Committed Towards Progress</Text>
+              </View>
+              
+              {/* ATSAIC text */}
+              <Text style={styles.atsaicText}>ATSAIC</Text>
+            </View>
+            <Text style={styles.connectWhatsApp}>Connect on WhatsApp</Text>
           </View>
         </View>
-
-        <Text style={styles.description}>
-          "I help businesses like yours scale and succeed with GTM strategy, innovative development, and AI-driven automation."
-        </Text>
-
-        <View style={styles.bottomSection}>
-          <View style={styles.logoContainer}>
-            <Image 
-              source={require('../../assets/images/thor-signia-logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              onPress={handleWhatsApp}
-              style={styles.actionButton}
-            >
-              <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={handleCall}
-              style={styles.actionButton}
-            >
-              <Ionicons name="call-outline" size={18} color="#2563EB" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              onPress={handleShare}
-              style={styles.actionButton}
-            >
-              <Ionicons name="share-social-outline" size={18} color="#4B5563" />
-            </TouchableOpacity>
-          </View>
-        </View>
+      </View>
+      
+      {/* Action buttons below the card */}
+      <View style={styles.actionButtonsContainer}>
+        <TouchableOpacity
+          onPress={handleWhatsApp}
+          style={styles.actionButton}
+        >
+          <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          onPress={handleCall}
+          style={styles.actionButton}
+        >
+          <Ionicons name="call-outline" size={24} color="#2563EB" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          onPress={handleShare}
+          style={styles.actionButton}
+        >
+          <Ionicons name="share-social-outline" size={24} color="#4B5563" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -111,91 +143,17 @@ interface BusinessCardListProps {
   cards: BusinessCardType[];
   onRefresh?: () => void;
   refreshing?: boolean;
-  onFilterChange?: (filter: FilterPeriod) => void;
 }
-
-type FilterPeriod = 'today' | 'lastWeek' | 'thisMonth';
 
 const BusinessCardList: React.FC<BusinessCardListProps> = ({
   cards,
   onRefresh,
   refreshing = false,
-  onFilterChange,
 }) => {
-  const [selectedFilter, setSelectedFilter] = React.useState<FilterPeriod>('today');
-
-  const handleFilterChange = (filter: FilterPeriod) => {
-    setSelectedFilter(filter);
-    onFilterChange?.(filter);
-  };
-
-  const filterCards = (period: FilterPeriod) => {
-    const now = new Date();
-    const cardDate = (card: BusinessCardType) => new Date(card.created_at);
-    
-    switch (period) {
-      case 'today':
-        return cards.filter(card => 
-          cardDate(card).toDateString() === now.toDateString()
-        );
-      case 'lastWeek':
-        const lastWeek = new Date(now.setDate(now.getDate() - 7));
-        return cards.filter(card => cardDate(card) >= lastWeek);
-      case 'thisMonth':
-        return cards.filter(card => 
-          cardDate(card).getMonth() === now.getMonth() &&
-          cardDate(card).getFullYear() === now.getFullYear()
-        );
-      default:
-        return cards;
-    }
-  };
-
   return (
     <View style={styles.container}>
-      <View style={styles.filterBar}>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedFilter === 'today' && styles.filterButtonActive,
-          ]}
-          onPress={() => handleFilterChange('today')}
-        >
-          <Text style={[
-            styles.filterText,
-            selectedFilter === 'today' && styles.filterTextActive,
-          ]}>Today</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedFilter === 'lastWeek' && styles.filterButtonActive,
-          ]}
-          onPress={() => handleFilterChange('lastWeek')}
-        >
-          <Text style={[
-            styles.filterText,
-            selectedFilter === 'lastWeek' && styles.filterTextActive,
-          ]}>Last week</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedFilter === 'thisMonth' && styles.filterButtonActive,
-          ]}
-          onPress={() => handleFilterChange('thisMonth')}
-        >
-          <Text style={[
-            styles.filterText,
-            selectedFilter === 'thisMonth' && styles.filterTextActive,
-          ]}>This Month</Text>
-        </TouchableOpacity>
-      </View>
-
       <FlatList
-        data={filterCards(selectedFilter)}
+        data={cards}
         renderItem={({ item }) => <BusinessCardComponent item={item} />}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.list}
@@ -212,128 +170,188 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  filterBar: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: 'white',
-    gap: 8,
-  },
-  filterButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
-  },
-  filterButtonActive: {
-    backgroundColor: '#8ac041',
-  },
-  filterText: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  filterTextActive: {
-    color: 'white',
-    fontWeight: '500',
-  },
   list: {
-    padding: 12,
-    gap: 12,
+    padding: 16,
+  },
+  cardContainer: {
+    marginBottom: 16,
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    overflow: 'hidden',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    marginBottom: 12,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 3,
+    elevation: 2,
   },
   cardContent: {
-    padding: 16,
+    padding: 10,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+  topSection: {
+    marginBottom: 8,
   },
-  mainContent: {
+  nameAndTitleSection: {
     flex: 1,
-    marginRight: 12,
-  },
-  nameSection: {
-    marginBottom: 4,
   },
   name: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
+    fontWeight: '700',
+    color: '#000',
+    lineHeight: 18,
+  },
+  surname: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    lineHeight: 18,
   },
   jobTitle: {
-    fontSize: 12,
-    color: '#4B5563',
+    fontSize: 10,
+    color: '#666',
     fontStyle: 'italic',
+    marginTop: 2,
   },
-  contactInfo: {
-    marginTop: 4,
+  middleSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  leftSection: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  contactSection: {
+    marginBottom: 6,
   },
   email: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#4B5563',
-    marginBottom: 1,
+    marginBottom: 2,
   },
   phone: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#4B5563',
   },
-  description: {
-    fontSize: 12,
+  quoteSection: {
+  },
+  quoteText: {
+    fontSize: 9,
     color: '#4B5563',
-    marginBottom: 12,
     fontStyle: 'italic',
-    lineHeight: 16,
+    lineHeight: 11,
   },
-  qrContainer: {
+  highlightGreen: {
+    color: '#22C55E',
+    fontWeight: '600',
+  },
+  highlightTeal: {
+    color: '#14B8A6',
+    fontWeight: '600',
+  },
+  verticalDottedLine: {
+    width: 1,
+    backgroundColor: '#14B8A6',
+    height: 36,
+    marginHorizontal: 10,
+    opacity: 0.8,
+  },
+  qrSection: {
+    width: 88,
     alignItems: 'center',
-    width: 65,
   },
-  qrText: {
-    fontSize: 8,
+  qrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    width: '100%',
+    marginBottom: 1,
+  },
+  qrHeaderText: {
+    fontSize: 9,
+    fontWeight: '600',
     color: '#4B5563',
-    marginTop: 2,
-    textAlign: 'center',
+    marginRight: 2,
+  },
+  qrSubText: {
+    fontSize: 7,
+    color: '#4B5563',
+    textAlign: 'right',
+    marginBottom: 3,
+    width: '100%',
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+  },
+  horizontalGreenLine: {
+    height: 1,
+    backgroundColor: '#22C55E',
+    marginBottom: 8,
   },
   bottomSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
   },
-  logoContainer: {
+  bottomLeftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  thorContainer: {
     alignItems: 'flex-start',
   },
-  logo: {
-    height: 100,
-    width: 110,
-  },
-  actionButtons: {
+  thorTitleContainer: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+  },
+  thorPrefix: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#22C55E',
+    lineHeight: 13,
+  },
+  thorSuffix: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#14B8A6',
+    lineHeight: 13,
+  },
+  thorTagline: {
+    fontSize: 7,
+    color: '#666',
+    marginTop: 1,
+  },
+  atsaicText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    letterSpacing: 1.1,
+  },
+  connectWhatsApp: {
+    fontSize: 7,
+    color: '#4B5563',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
   },
   actionButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
 });
 

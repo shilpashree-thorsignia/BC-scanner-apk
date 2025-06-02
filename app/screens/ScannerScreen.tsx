@@ -1,241 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, Dimensions, Platform, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, Dimensions, Platform, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { CameraCapturedPicture } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { getResponsiveData, scaleSize } from '../../constants/responsive';
+import { scanBusinessCard, createBusinessCard } from '../lib/api';
 
-export default function ScannerScreen() {
-  const [flashOn, setFlashOn] = useState<boolean>(false);
-  const cameraRef = useRef<CameraView>(null);
-  const router = useRouter();
-  const [permission, requestPermission] = useCameraPermissions();
-  const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
-  
-  // Update dimensions when screen size changes
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setDimensions(window);
-    });
+// Define BusinessCard type locally if the import is not available
+type BusinessCard = {
+  id?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  company?: string;
+  imageUri?: string;
+};
 
-    return () => subscription.remove();
-  }, []);
-
-  const { isDesktop, isMobileWeb, isWeb } = getResponsiveData();
-  
-  // Responsive sizes
-  const iconSize = scaleSize(24);
-  const largeIconSize = scaleSize(30);
-  const buttonSize = scaleSize(44);
-  const largeButtonSize = scaleSize(70);
-  const innerButtonSize = scaleSize(60);
-  const cornerSize = scaleSize(20);
-  const cardFrameWidth = Math.min(dimensions.width * 0.9, 500);
-
-  if (!permission) {
-    return <View />;
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>
-          We need your permission to show the camera
-        </Text>
-        <TouchableOpacity 
-          style={styles.permissionButton}
-          onPress={requestPermission}
-        >
-          <Text style={styles.permissionButtonText}>
-            Grant Permission
-          </Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  const takePicture = async (): Promise<void> => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync() as CameraCapturedPicture;
-        // Handle the captured photo as needed
-      } catch (error) {
-        console.error('Error taking picture:', error);
-      }
-    }
-  };
-
-  // For web desktop, show a mock camera view
-  if (isWeb && isDesktop) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContent}>
-          <View style={[styles.mockCamera, { maxWidth: 480, aspectRatio: 3/4 }]}>
-            {/* Mock camera frame */}
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => router.back()}>
-                <MaterialIcons name="chevron-left" size={largeIconSize} color="white" />
-              </TouchableOpacity>
-              <Text style={styles.headerText}>
-                Log 2 of 3
-              </Text>
-              <TouchableOpacity>
-                <MaterialIcons name="chevron-right" size={largeIconSize} color="white" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Card Frame */}
-            <View style={styles.cardFrameContainer}>
-              <View style={[styles.cardFrame, { width: cardFrameWidth }]}>
-                <View style={[styles.corner, styles.topLeft, { width: cornerSize, height: cornerSize }]} />
-                <View style={[styles.corner, styles.topRight, { width: cornerSize, height: cornerSize }]} />
-                <View style={[styles.corner, styles.bottomLeft, { width: cornerSize, height: cornerSize }]} />
-                <View style={[styles.corner, styles.bottomRight, { width: cornerSize, height: cornerSize }]} />
-              </View>
-            </View>
-
-            {/* Bottom Action Bar */}
-            <View style={styles.actionBar}>
-              <TouchableOpacity 
-                style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-                onPress={() => router.back()}
-              >
-                <Text style={styles.actionButtonText}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, { width: largeButtonSize, height: largeButtonSize }]}
-                onPress={takePicture}
-              >
-                <View 
-                  style={[styles.innerButton, { width: innerButtonSize, height: innerButtonSize }]}
-                />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-              >
-                <MaterialIcons name="photo-library" size={iconSize} color="#00A99D" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-                onPress={() => router.back()}
-              >
-                <Text style={styles.actionButtonText}>
-                  Done
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          <Text style={styles.simulationText}>
-            Camera simulation in desktop web view
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.cameraContainer}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="back"
-          enableTorch={flashOn}
-        >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()}>
-              <MaterialIcons name="chevron-left" size={largeIconSize} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.headerText}>
-              Log 2 of 3
-            </Text>
-            <TouchableOpacity>
-              <MaterialIcons name="chevron-right" size={largeIconSize} color="white" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Top Action Bar */}
-          <View style={styles.topActionBar}>
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-              onPress={() => setFlashOn(!flashOn)}
-            >
-              <MaterialIcons 
-                name={flashOn ? "flash-on" : "flash-off"} 
-                size={iconSize} 
-                color="#00A99D" 
-              />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            >
-              <MaterialIcons name="description" size={iconSize} color="#00A99D" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            >
-              <MaterialIcons name="help-outline" size={iconSize} color="#00A99D" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Card Frame */}
-          <View style={styles.cardFrameContainer}>
-            <View style={[styles.cardFrame, { width: cardFrameWidth }]}>
-              <View style={[styles.corner, styles.topLeft, { width: cornerSize, height: cornerSize }]} />
-              <View style={[styles.corner, styles.topRight, { width: cornerSize, height: cornerSize }]} />
-              <View style={[styles.corner, styles.bottomLeft, { width: cornerSize, height: cornerSize }]} />
-              <View style={[styles.corner, styles.bottomRight, { width: cornerSize, height: cornerSize }]} />
-            </View>
-          </View>
-
-          {/* Bottom Action Bar */}
-          <View style={styles.actionBar}>
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.actionButtonText}>
-                Cancel
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: largeButtonSize, height: largeButtonSize }]}
-              onPress={takePicture}
-            >
-              <View 
-                style={[styles.innerButton, { width: innerButtonSize, height: innerButtonSize }]}
-              />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            >
-              <MaterialIcons name="photo-library" size={iconSize} color="#00A99D" />
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-              onPress={() => router.back()}
-            >
-              <Text style={styles.actionButtonText}>
-                Done
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </CameraView>
-      </View>
-    </SafeAreaView>
-  );
-}
-
+// Define styles at the top of the file to avoid using before declaration errors
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -277,6 +59,7 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
@@ -291,6 +74,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    zIndex: 10,
   },
   headerText: {
     color: 'white',
@@ -308,6 +92,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 20,
     borderRadius: 24,
+    zIndex: 10,
   },
   cardFrameContainer: {
     position: 'absolute',
@@ -318,6 +103,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    zIndex: 10,
   },
   cardFrame: {
     aspectRatio: 1.6,
@@ -368,6 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     marginHorizontal: 20,
     borderRadius: 24,
+    zIndex: 10,
   },
   actionButton: {
     borderRadius: 999,
@@ -398,4 +185,407 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 18,
   },
-}); 
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  successContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+  }
+});
+
+export default function ScannerScreen() {
+  const [flashOn, setFlashOn] = useState<boolean>(false);
+  const [processing, setProcessing] = useState<boolean>(false);
+  const [scanSuccess, setScanSuccess] = useState<boolean>(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [manualNameInput, setManualNameInput] = useState<string>('');
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+  const router = useRouter();
+  const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
+  
+  // Update dimensions when screen size changes
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions(window);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  const { isDesktop, isMobileWeb, isWeb } = getResponsiveData();
+  
+  // Responsive sizes
+  const iconSize = scaleSize(24);
+  const largeIconSize = scaleSize(30);
+  const buttonSize = scaleSize(44);
+  const largeButtonSize = scaleSize(70);
+  const innerButtonSize = scaleSize(60);
+  const cornerSize = scaleSize(20);
+  const cardFrameWidth = Math.min(dimensions.width * 0.9, 500);
+
+  if (!permission) {
+    return <View />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>
+          We need your permission to show the camera
+        </Text>
+        <TouchableOpacity 
+          style={styles.permissionButton}
+          onPress={requestPermission}
+        >
+          <Text style={styles.permissionButtonText}>
+            Grant Permission
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const takePicture = async (): Promise<void> => {
+    if (cameraRef.current) {
+      try {
+        setProcessing(true);
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 }) as CameraCapturedPicture;
+        setCapturedImage(photo.uri);
+        
+        try {
+          // Try to call the API to scan the business card
+          const scanResult = await scanBusinessCard(photo.uri);
+          console.log('Scan successful:', scanResult);
+          setScanSuccess(true);
+          
+          // Navigate back after a short delay to show success feedback
+          setTimeout(() => {
+            router.push('/');
+          }, 1500);
+        } catch (scanError) {
+          console.error('Error scanning business card:', scanError);
+          
+          // If backend OCR fails, ask user to manually enter a name for the card
+          if (scanError instanceof Error && scanError.message && scanError.message.includes('tesseract is not installed')) {
+            promptForManualEntry(photo.uri);
+          } else {
+            setProcessing(false);
+            Alert.alert(
+              'Scan Failed',
+              'Could not scan the business card. Please try again or add manually.',
+              [
+                { text: 'Try Again', onPress: () => {
+                  setCapturedImage(null);
+                  setProcessing(false);
+                }},
+                { text: 'Add Manually', onPress: () => router.push('/screens/AddManually' as any) }
+              ]
+            );
+          }
+        }
+      } catch (error) {
+        console.error('Error taking picture:', error);
+        setProcessing(false);
+        Alert.alert('Error', 'Failed to take picture. Please try again.');
+      }
+    }
+  };
+  
+  const promptForManualEntry = (imageUri: string) => {
+    // On Android, Alert.prompt is not available, so we need to handle this differently
+    if (Platform.OS === 'android') {
+      // For Android, we'll use a simpler approach since we can't use Alert.prompt
+      Alert.alert(
+        'Manual Entry Required',
+        'OCR service is unavailable. Please enter a name for this business card.',
+        [
+          {
+            text: 'Cancel',
+            onPress: () => {
+              setCapturedImage(null);
+              setProcessing(false);
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Add Card with Image Only',
+            onPress: async () => {
+              try {
+                // Create a business card with the name and image
+                await createBusinessCard({
+                  name: manualNameInput || 'Unnamed Card',
+                  imageUri: imageUri,
+                } as BusinessCard);
+                setScanSuccess(true);
+                setTimeout(() => {
+                  router.push('/');
+                }, 1500);
+              } catch (error) {
+                console.error('Error creating card:', error);
+                Alert.alert('Error', 'Failed to save the card. Please try again.');
+                setProcessing(false);
+              }
+            },
+          },
+        ],
+      );
+    } else {
+      Alert.alert(
+        'OCR Not Available',
+        'Automatic text recognition is not available. Would you like to save this card with a name?',
+        [
+          { text: 'Cancel', onPress: () => {
+            setCapturedImage(null);
+            setProcessing(false);
+          }},
+          { text: 'Save Card', onPress: () => {
+            // Ask for a name
+            // Note: Alert.prompt is iOS only, this will need a custom modal for Android
+            // For this demo, we're using it directly
+            Alert.prompt(
+              'Enter Card Name',
+              'Please enter a name for this business card',
+              [
+                { text: 'Cancel', onPress: () => {
+                  setCapturedImage(null);
+                  setProcessing(false);
+                }},
+                { text: 'Save', onPress: async (name?: string) => {
+                  const cardName = name || '';
+                  if (cardName && cardName.trim()) {
+                    try {
+                      // Create a business card with the name and image
+                      await createBusinessCard({
+                        name: cardName.trim(),
+                        imageUri: imageUri
+                      } as BusinessCard);
+                      setScanSuccess(true);
+                      
+                      // Navigate back after success
+                      setTimeout(() => {
+                        router.push('/');
+                      }, 1500);
+                    } catch (saveError) {
+                      console.error('Error saving card:', saveError);
+                      setProcessing(false);
+                      Alert.alert('Error', 'Failed to save the card. Please try again.');
+                    }
+                  } else {
+                    Alert.alert('Error', 'Name cannot be empty');
+                    setProcessing(false);
+                  }
+                }}
+              ],
+              'plain-text'
+            );
+          }}
+        ]
+      );
+    }
+  };
+
+  // For web desktop, show a mock camera view
+  if (isWeb && isDesktop) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContent}>
+          <View style={[styles.mockCamera, { maxWidth: 480, aspectRatio: 3/4 }]}>
+            {/* Mock camera frame */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => router.back()}>
+                <MaterialIcons name="chevron-left" size={largeIconSize} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.headerText}>
+                Scan Business Card
+              </Text>
+              <TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={largeIconSize} color="white" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.actionButton, { width: largeButtonSize, height: largeButtonSize, marginTop: 32 }]}
+                onPress={() => {
+                  setProcessing(true);
+                  // Simulate taking a picture
+                  setTimeout(() => {
+                    // Simulate manual entry since we can't actually take a picture
+                    Alert.alert(
+                      'Mock Camera Capture',
+                      'Enter a name for this business card',
+                      [
+                        { text: 'Cancel', onPress: () => setProcessing(false) },
+                        { 
+                          text: 'Save', 
+                          onPress: async () => {
+                            try {
+                              // Create a mock business card
+                              await createBusinessCard({
+                                name: 'Mock Business Card',
+                                imageUri: 'https://example.com/mock-image.jpg'
+                              } as BusinessCard);
+                              setScanSuccess(true);
+                              setTimeout(() => {
+                                router.push('/');
+                              }, 1500);
+                            } catch (error) {
+                              Alert.alert('Error', 'Failed to save the mock card.');
+                              setProcessing(false);
+                            }
+                          } 
+                        }
+                      ]
+                    );
+                  }, 1000);
+                }}
+              >
+                {processing ? (
+                  <ActivityIndicator color="#00A99D" size="small" />
+                ) : (
+                  <View style={[styles.innerButton, { width: innerButtonSize, height: innerButtonSize }]} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: buttonSize, height: buttonSize, marginTop: 16 }]}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.actionButtonText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.cameraContainer}>
+        {/* Camera View without children */}
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="back"
+          enableTorch={flashOn}
+        />
+        
+        {/* Header - positioned absolutely over camera */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={iconSize} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.headerText}>Scan Business Card</Text>
+          <TouchableOpacity onPress={() => setFlashOn(!flashOn)}>
+            <MaterialIcons 
+              name={flashOn ? "flash-on" : "flash-off"} 
+              size={iconSize} 
+              color="white" 
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Card Frame - positioned absolutely over camera */}
+        <View style={styles.cardFrameContainer}>
+          <View style={[styles.cardFrame, { width: cardFrameWidth }]}>
+            <View style={[styles.corner, styles.topLeft, { width: cornerSize, height: cornerSize }]} />
+            <View style={[styles.corner, styles.topRight, { width: cornerSize, height: cornerSize }]} />
+            <View style={[styles.corner, styles.bottomLeft, { width: cornerSize, height: cornerSize }]} />
+            <View style={[styles.corner, styles.bottomRight, { width: cornerSize, height: cornerSize }]} />
+          </View>
+        </View>
+
+        {/* Processing/Success Overlay */}
+        {processing && (
+          <View style={styles.overlay}>
+            {scanSuccess ? (
+              <View style={styles.successContainer}>
+                <MaterialIcons name="check-circle" size={largeIconSize * 2} color="#8ac041" />
+                <Text style={styles.successText}>Card Scanned Successfully!</Text>
+              </View>
+            ) : (
+              <ActivityIndicator size="large" color="#8ac041" />
+            )}
+          </View>
+        )}
+        
+        {/* Top Action Bar */}
+        <View style={styles.topActionBar}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+            onPress={() => setFlashOn(!flashOn)}
+          >
+            <MaterialIcons 
+              name={flashOn ? "flash-on" : "flash-off"} 
+              size={iconSize} 
+              color="#00A99D" 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+            onPress={() => router.back()}
+            disabled={processing}
+          >
+            <Text style={styles.actionButtonText}>
+              Done
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Bottom Action Bar */}
+        <View style={styles.actionBar}>
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+            onPress={() => router.back()}
+          >
+            <MaterialIcons name="arrow-back" size={iconSize} color="#00A99D" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: largeButtonSize, height: largeButtonSize }]}
+            onPress={takePicture}
+            disabled={processing}
+          >
+            {processing ? (
+              <ActivityIndicator color="#00A99D" size="small" />
+            ) : (
+              <View style={[styles.innerButton, { width: innerButtonSize, height: innerButtonSize }]} />
+            )}
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+            onPress={() => setFlashOn(!flashOn)}
+          >
+            <MaterialIcons 
+              name={flashOn ? "flash-on" : "flash-off"} 
+              size={iconSize} 
+              color="#00A99D" 
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+            onPress={() => router.back()}
+            disabled={processing}
+          >
+            <Text style={styles.actionButtonText}>
+              Done
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}

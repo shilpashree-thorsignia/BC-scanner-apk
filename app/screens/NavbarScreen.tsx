@@ -86,6 +86,34 @@ const NavbarScreen: React.FC = () => {
         <TouchableOpacity 
           style={[
             styles.navigationButton,
+            activeTab === 'scan-qr' && styles.activeNavigationButton
+          ]}
+          onPress={() => {
+            setActiveTab('scan-qr');
+            router.push('/scanner' as any);
+          }}
+        >
+          <Ionicons name="qr-code" size={24} color="#fff" />
+          <Text style={styles.navigationButtonText}>Scan QR</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[
+            styles.navigationButton,
+            activeTab === 'scan-card' && styles.activeNavigationButton
+          ]}
+          onPress={() => {
+            setActiveTab('scan-card');
+            router.push('/screens/ScannerScreen' as any);
+          }}
+        >
+          <Ionicons name="camera" size={24} color="#fff" />
+          <Text style={styles.navigationButtonText}>Scan Card</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[
+            styles.navigationButton,
             activeTab === 'add' && styles.activeNavigationButton
           ]}
           onPress={() => {
