@@ -9,37 +9,92 @@ import { BusinessCard } from '../lib/api';
  */
 const generateCardHTML = (card: BusinessCard): string => {
   // Create MECARD format for QR code
-  const qrData = `MECARD:N:${card.name};TEL:${card.mobile || ''};EMAIL:${card.email || ''};URL:${card.website || ''};NOTE:${card.job_title || ''};`;
+  const qrData = `MECARD:N:${card.name || 'Not Provided'};${card.mobile ? 'TEL:' + card.mobile + ';' : ''}${card.email ? 'EMAIL:' + card.email + ';' : ''}${card.website ? 'URL:' + card.website + ';' : ''}${card.address ? 'ADR:' + card.address + ';' : ''}`;
   
   // Generate a data URI for the QR code using a more reliable method
   // We're using a base64 encoded SVG directly in the HTML
-  const qrCodeSvg = generateQRCodeSVG(qrData, 150);
+  const qrCodeSvg = generateQRCodeSVG(qrData, 80);
+  
+  // Format the created date
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Date unknown';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+    
+    if (isToday) {
+      // Format as time if today
+      return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      // Format as date otherwise
+      return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+  };
+  
+  const createdDate = formatDate(card.created_at);
+  
+  // Split name into parts if possible (assuming first name and surname)
+  const nameParts = card.name ? card.name.split(' ') : ['Not', 'Provided'];
+  const firstName = nameParts.length > 0 ? nameParts[0] : 'Not';
+  const surname = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Provided';
   
   return `
-    <div class="card" style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 25px; page-break-inside: avoid; background-color: white; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); height: 200px; width: 90%; max-width: 500px; margin-left: auto; margin-right: auto; position: relative; overflow: hidden;">
-      <!-- Card background accent color -->
-      <div style="position: absolute; top: 0; left: 0; width: 8px; height: 100%; background-color: #4CAF50;"></div>
-      
-      <div style="display: flex; justify-content: space-between; height: 100%; padding-left: 10px;">
-        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
-          <h2 style="margin: 0; font-size: 22px; font-weight: 600; color: #111827;">${card.name || ''}</h2>
-          <p style="margin: 4px 0; font-size: 16px; color: #4B5563; font-style: italic;">${card.job_title || ''}</p>
+    <div class="card" style="border: 2px solid #3B82F6; border-radius: 8px; padding: 12px; margin-bottom: 20px; page-break-inside: avoid; background-color: white; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); width: 90%; max-width: 500px; margin-left: auto; margin-right: auto; position: relative; overflow: hidden;">
+      <div style="position: relative;">
+        <!-- Top Section - Name, Title and Date/QR -->
+        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+          <!-- Name and Title -->
+          <div>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #000;">${firstName}</h2>
+            <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #000;">${surname}</h2>
+            <p style="margin: 1px 0 0; font-size: 12px; color: #666; font-style: italic;">${card.job_title || 'Not provided'}</p>
+          </div>
           
-          <div style="height: 1px; background-color: #e5e7eb; margin: 12px 0;"></div>
-          
-          <p style="margin: 8px 0; font-size: 15px; color: #111827; font-weight: 500;">${card.company || ''}</p>
-          
-          <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 5px;">
-            ${card.email ? `<p style="margin: 0; font-size: 14px; color: #4B5563;">📧 ${card.email}</p>` : ''}
-            ${card.mobile ? `<p style="margin: 0; font-size: 14px; color: #4B5563;">📱 ${card.mobile}</p>` : ''}
-            ${card.website ? `<p style="margin: 0; font-size: 14px; color: #4B5563;">🌐 ${card.website}</p>` : ''}
-            ${card.address ? `<p style="margin: 0; font-size: 14px; color: #4B5563;">📍 ${card.address}</p>` : ''}
+          <!-- Date and QR Code -->
+          <div style="text-align: center; width: 90px; background-color: rgba(255, 255, 255, 0.8); border-radius: 4px; padding: 4px;">
+            <p style="margin: 0 0 2px; font-size: 10px; color: #6B7280; font-style: italic; text-align: center;">${createdDate}</p>
+            ${qrCodeSvg}
+            <p style="margin: 1px 0 0; font-size: 9px; font-weight: 600; color: #4B5563; text-align: center;">Connect</p>
+            <p style="margin: 0; font-size: 7px; color: #4B5563; text-align: center;">Access to tools & resources</p>
           </div>
         </div>
         
-        <div style="text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-left: 20px; min-width: 120px;">
-          ${qrCodeSvg}
-          <p style="margin: 4px 0; font-size: 10px; color: #4B5563; text-align: center;">Scan to add contact</p>
+        <!-- Middle Section - Contact and Notes -->
+        <div style="padding-right: 85px; margin-bottom: 8px;">
+          <!-- Contact Info -->
+          <div style="margin-bottom: 4px;">
+            <p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.email || 'Email not provided'}</p>
+            <p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.mobile || 'Phone not provided'}</p>
+            ${card.company ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.company}</p>` : ''}
+            ${card.website ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563; text-decoration: underline;">${card.website}</p>` : ''}
+          </div>
+          
+          <!-- Notes -->
+          <div>
+            <p style="margin: 0; font-size: 11px; color: #4B5563; font-style: italic;">${card.notes || 'No additional notes provided'}</p>
+          </div>
+        </div>
+        
+        <!-- Horizontal green line -->
+        <div style="height: 1px; background-color: #22C55E; margin-bottom: 8px;"></div>
+        
+        <!-- Bottom Section - Logos and WhatsApp -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <!-- Thor Signia Logo with tagline -->
+            <div>
+              <div style="display: flex; align-items: center;">
+                <span style="font-size: 13px; font-weight: 400; color: #22C55E; line-height: 15px;">Thor</span>
+                <span style="font-size: 13px; font-weight: 700; color: #14B8A6; line-height: 15px;">Signia</span>
+              </div>
+              <p style="margin: 1px 0 0; font-size: 8px; color: #666;">Committed Towards Progress</p>
+            </div>
+            
+            <!-- ATSAIC text -->
+            <span style="font-size: 14px; font-weight: 700; color: #374151; letter-spacing: 1.1px;">ATSAIC</span>
+          </div>
+          <p style="margin: 0; font-size: 8px; color: #4B5563;">Connect on WhatsApp</p>
         </div>
       </div>
     </div>
