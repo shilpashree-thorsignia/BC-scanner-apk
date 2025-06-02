@@ -12,12 +12,14 @@ import {
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BusinessCard as BusinessCardType } from '../lib/api';
 import QRCode from 'react-native-qrcode-svg';
+import { useTheme } from '../context/ThemeContext';
 
 interface BusinessCardProps {
   item: BusinessCardType;
 }
 
 const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
+  const { colors, isDark } = useTheme();
   const handleWhatsApp = () => {
     if (item.mobile) {
       Linking.openURL(`https://wa.me/${item.mobile}`);
@@ -77,29 +79,29 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
 
   return (
     <View style={styles.cardContainer}>
-      <View style={styles.card}>
+      <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}>
         <View style={styles.cardContent}>
           {/* Top Section - Name and Title */}
           <View style={styles.topSection}>
             <View style={styles.nameAndTitleSection}>
-              <Text style={styles.name}>{firstName}</Text>
-              <Text style={styles.surname}>{surname}</Text>
-              <Text style={styles.jobTitle}>{item.job_title || 'Not provided'}</Text>
+              <Text style={[styles.name, { color: colors.text }]}>{firstName}</Text>
+              <Text style={[styles.surname, { color: colors.text }]}>{surname}</Text>
+              <Text style={[styles.jobTitle, { color: colors.secondaryText }]}>{item.job_title || 'Not provided'}</Text>
             </View>
             {/* Created Date and QR Code */}
             <View style={styles.dateAndQrContainer}>
-              <Text style={styles.dateText}>{createdDate}</Text>
+              <Text style={[styles.dateText, { color: colors.secondaryText }]}>{createdDate}</Text>
               <View style={styles.qrCodeContainer}>
                 <QRCode
                   value={qrValue}
                   size={64}
-                  color="black"
-                  backgroundColor="white"
+                  color={isDark ? 'white' : 'black'}
+                  backgroundColor={colors.qrBackground}
                 />
               </View>
               <View style={styles.qrTextContainer}>
-                <Text style={styles.qrHeaderText}>Connect</Text>
-                <Text style={styles.qrSubText}>Access to tools & resources</Text>
+                <Text style={[styles.qrHeaderText, { color: colors.secondaryText }]}>Connect</Text>
+                <Text style={[styles.qrSubText, { color: colors.secondaryText }]}>Access to tools & resources</Text>
               </View>
             </View>
           </View>
@@ -109,9 +111,9 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
             {/* Contact and Quote */}
             <View style={styles.contentSection}>
               <View style={styles.contactSection}>
-                <Text style={styles.email}>{item.email || 'Email not provided'}</Text>
-                <Text style={styles.phone}>{item.mobile || 'Phone not provided'}</Text>
-                {item.company && <Text style={styles.company}>{item.company}</Text>}
+                <Text style={[styles.email, { color: colors.secondaryText }]}>{item.email || 'Email not provided'}</Text>
+                <Text style={[styles.phone, { color: colors.secondaryText }]}>{item.mobile || 'Phone not provided'}</Text>
+                {item.company && <Text style={[styles.company, { color: colors.secondaryText }]}>{item.company}</Text>}
                 {item.website && <Text style={styles.website}>{item.website}</Text>}
               </View>
               <View style={styles.quoteSection}>
@@ -193,12 +195,21 @@ interface FilterOptionProps {
 }
 
 const FilterOptionButton: React.FC<FilterOptionProps> = ({ label, value, isActive, onPress }) => {
+  const { colors } = useTheme();
   return (
     <TouchableOpacity
-      style={[styles.filterOption, isActive && styles.activeFilterOption]}
+      style={[
+        styles.filterOption, 
+        { backgroundColor: isActive ? colors.accent : colors.filterBackground },
+      ]}
       onPress={() => onPress(value)}
     >
-      <Text style={[styles.filterOptionText, isActive && styles.activeFilterOptionText]}>
+      <Text 
+        style={[
+          styles.filterOptionText, 
+          { color: isActive ? colors.buttonText : colors.secondaryText }
+        ]}
+      >
         {label}
       </Text>
     </TouchableOpacity>
@@ -210,6 +221,7 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
   onRefresh,
   refreshing = false,
 }) => {
+  const { colors } = useTheme();
   // State for the current filter
   const [currentFilter, setCurrentFilter] = useState<FilterOption>('all');
   
@@ -256,9 +268,9 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
   const filteredCards = getFilteredCards();
   
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Filter options */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.filterContainer, { backgroundColor: colors.cardBackground }]}>
         <FilterOptionButton 
           label="All Cards" 
           value="all" 

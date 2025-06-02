@@ -1,41 +1,70 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import { getAllBusinessCards } from '../lib/api';
 import { exportBusinessCards } from '../utils/exportCards';
+import { useTheme } from '../context/ThemeContext';
 
 interface ListItemProps {
   title: string;
   onPress: () => void;
   disabled?: boolean;
   rightElement?: React.ReactNode;
+  showToggle?: boolean;
+  toggleValue?: boolean;
+  onToggleChange?: (value: boolean) => void;
 }
 
 interface SectionHeaderProps {
   title: string;
 }
 
-const ListItem: React.FC<ListItemProps> = ({ title, onPress, disabled, rightElement }) => (
-  <TouchableOpacity 
-    style={styles.listItem} 
-    onPress={onPress}
-    disabled={disabled}
-  >
-    <Text style={styles.listItemText}>{title}</Text>
-    {rightElement}
-    <Ionicons name="chevron-forward-outline" size={24} color="#CCCCCC" />
-  </TouchableOpacity>
-);
+const ListItem: React.FC<ListItemProps> = ({ 
+  title, 
+  onPress, 
+  disabled, 
+  rightElement, 
+  showToggle, 
+  toggleValue, 
+  onToggleChange 
+}) => {
+  const { colors } = useTheme();
+  
+  return (
+    <TouchableOpacity 
+      style={[styles.listItem, { backgroundColor: colors.listItemBackground }]} 
+      onPress={onPress}
+      disabled={disabled || showToggle}
+    >
+      <Text style={[styles.listItemText, { color: colors.text }]}>{title}</Text>
+      {rightElement}
+      {showToggle ? (
+        <Switch
+          value={toggleValue}
+          onValueChange={onToggleChange}
+          trackColor={{ false: '#767577', true: '#81b0ff' }}
+          thumbColor={toggleValue ? colors.accent : '#f4f3f4'}
+        />
+      ) : (
+        <Ionicons name="chevron-forward-outline" size={24} color={colors.chevron} />
+      )}
+    </TouchableOpacity>
+  );
+};
 
-const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => (
-  <Text style={styles.sectionHeader}>{title}</Text>
-);
+const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => {
+  const { colors } = useTheme();
+  return (
+    <Text style={[styles.sectionHeader, { color: colors.secondaryText }]}>{title}</Text>
+  );
+};
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [isExporting, setIsExporting] = useState(false);
+  const { colors, toggleTheme, isDark } = useTheme();
 
   const handleBack = () => {
     router.back();
@@ -85,14 +114,14 @@ export default function SettingsScreen() {
         }}
       />
       
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { backgroundColor: colors.headerBackground }]}>
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={handleBack}
           >
-            <Ionicons name="arrow-back" size={24} color="#000" />
-            <Text style={styles.headerTitle}>Settings</Text>
+            <Ionicons name="arrow-back" size={24} color={colors.icon} />
+            <Text style={[styles.headerTitle, { color: colors.text }]}>Settings</Text>
           </TouchableOpacity>
         </View>
 
@@ -103,7 +132,13 @@ export default function SettingsScreen() {
           <SectionHeader title="GENERAL" />
           <ListItem title="User ID" onPress={() => {}} />
           <ListItem title="Language" onPress={() => {}} />
-          <ListItem title="Dark theme" onPress={() => {}} />
+          <ListItem 
+            title="Dark theme" 
+            onPress={() => {}}
+            showToggle={true}
+            toggleValue={isDark}
+            onToggleChange={toggleTheme}
+          />
           <ListItem title="Fix name capitalization" onPress={() => {}} />
           <ListItem title="Prompt for card sharing" onPress={() => {}} />
           <ListItem title="Edit groups" onPress={() => {}} />
@@ -111,7 +146,7 @@ export default function SettingsScreen() {
             title={isExporting ? "Exporting..." : "Export all cards"} 
             onPress={handleExportAllCards}
             disabled={isExporting}
-            rightElement={isExporting ? <ActivityIndicator size="small" color="#4CAF50" /> : undefined}
+            rightElement={isExporting ? <ActivityIndicator size="small" color={colors.accent} /> : undefined}
           />
           <ListItem title="AI Integration" onPress={() => {}} />
           <ListItem title="Configure webbook" onPress={() => {}} />

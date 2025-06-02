@@ -2,14 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Camera } from 'expo-camera';
-import { View, StyleSheet, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, Platform, Dimensions, StatusBar } from 'react-native';
+import ThemeProvider, { useTheme } from './context/ThemeContext';
 
-export default function RootLayout() {
+// This component will use the theme
+function AppLayout() {
   // Store dimensions in state to force re-render on resize
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
   const { width } = dimensions;
   const isDesktop = Platform.OS === 'web' && width > 768;
   const isWeb = Platform.OS === 'web';
+  const { colors, isDark } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -30,7 +33,6 @@ export default function RootLayout() {
         document.head.appendChild(viewportMeta);
       }
       
-      // Set proper viewport settings for mobile responsiveness
       viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
     }
   }, []);
@@ -55,29 +57,43 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <View style={styles.container}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: 'white',
-            },
-            animation: isWeb ? 'none' : 'default',
-          }}
-        >
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="screens" options={{ headerShown: false }} />
-        </Stack>
-      </View>
-    </SafeAreaProvider>
+    <>
+      <StatusBar 
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.background}
+      />
+      <SafeAreaProvider>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: {
+                backgroundColor: colors.background,
+              },
+              animation: isWeb ? 'none' : 'default',
+            }}
+          >
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="screens" options={{ headerShown: false }} />
+          </Stack>
+        </View>
+      </SafeAreaProvider>
+    </>
+  );
+}
+
+// Root layout that provides the theme
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <AppLayout />
+    </ThemeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'white',
   },
 });
