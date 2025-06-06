@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BusinessCard as BusinessCardType } from '../lib/api';
-import QRCode from 'react-native-qrcode-svg';
 import { useTheme } from '../context/ThemeContext';
 
 interface BusinessCardProps {
@@ -72,8 +71,6 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
   
   const createdDate = formatDate(item.created_at);
 
-  const qrValue = `MECARD:N:${item.name || 'Not Provided'};${item.mobile ? 'TEL:' + item.mobile + ';' : ''}${item.email ? 'EMAIL:' + item.email + ';' : ''}${item.website ? 'URL:' + item.website + ';' : ''}${item.address ? 'ADR:' + item.address + ';' : ''}`;
-
   return (
     <View style={styles.cardContainer}>
       <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}>
@@ -85,20 +82,8 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
               </View>
               <Text style={[styles.jobTitle, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.job_title || 'Not provided'}</Text>
             </View>
-            <View style={[styles.dateAndQrContainer, { backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)' }]}>
+            <View style={[styles.dateContainer, { backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)' }]}>
               <Text style={[styles.dateText, { color: isDark ? '#fff' : colors.secondaryText }]}>{createdDate}</Text>
-              <View style={styles.qrCodeContainer}>
-                <QRCode
-                  value={qrValue}
-                  size={64}
-                  color={isDark ? 'white' : 'black'}
-                  backgroundColor={colors.qrBackground}
-                />
-              </View>
-              <View style={styles.qrTextContainer}>
-                <Text style={[styles.qrHeaderText, { color: isDark ? '#fff' : colors.secondaryText }]}>Connect</Text>
-                <Text style={[styles.qrSubText, { color: isDark ? '#fff' : colors.secondaryText }]}>Access to tools & resources</Text>
-              </View>
             </View>
           </View>
 
@@ -109,12 +94,30 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
                 <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.mobile || 'Phone not provided'}</Text>
                 {item.company && <Text style={[styles.company, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.company}</Text>}
                 {item.website && <Text style={[styles.website, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.website}</Text>}
-                {item.address && <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.address}</Text>}
               </View>
               <View style={styles.quoteSection}>
                 <Text style={[styles.quoteText, { color: isDark ? '#fff' : colors.secondaryText }]}>
                   {item.notes || "No additional notes provided"}
                 </Text>
+              </View>
+            </View>
+            <View style={styles.rightSection}>
+              {item.address && (
+                <View style={[styles.dateContainer, { backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)' }]}>
+                  <Text style={[styles.dateText, { 
+                    color: isDark ? '#fff' : colors.secondaryText,
+                    textAlign: 'center'
+                  }]}>{item.address}</Text>
+                </View>
+              )}
+              <View style={[styles.dateContainer, { 
+                backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)',
+                marginTop: 8
+              }]}>
+                <Text style={[styles.dateText, { 
+                  color: isDark ? '#fff' : colors.secondaryText,
+                  textAlign: 'center'
+                }]}>{createdDate}</Text>
               </View>
             </View>
           </View>
@@ -291,25 +294,19 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
 };
 
 const styles = StyleSheet.create({
-  dateAndQrContainer: {
-    position: 'absolute',
-    right: 4,
-    top: 4,
-    padding: 4,
+  dateContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: 80,
-    borderRadius: 4,
+    padding: 6,
+    borderRadius: 6,
+    minWidth: 100,
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
   dateText: {
     fontSize: 10,
     color: '#6B7280',
     fontStyle: 'italic',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  qrTextContainer: {
-    alignItems: 'center',
-    marginTop: 2,
   },
   filterContainer: {
     backgroundColor: '#fff',
@@ -329,16 +326,10 @@ const styles = StyleSheet.create({
     marginRight: 6,
     backgroundColor: '#f3f4f6',
   },
-  activeFilterOption: {
-    backgroundColor: '#3B82F6',
-  },
   filterOptionText: {
     fontSize: 14,
     color: '#4B5563',
     fontWeight: '500',
-  },
-  activeFilterOptionText: {
-    color: '#ffffff',
   },
   company: {
     fontSize: 10,
@@ -379,12 +370,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   nameAndTitleSection: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 12,
     justifyContent: 'center',
-    maxWidth: '65%',
   },
   nameContainer: {
     flexDirection: 'row',
@@ -407,12 +398,20 @@ const styles = StyleSheet.create({
   },
   middleSection: {
     marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   contentSection: {
-    paddingRight: 85, /* Make room for the QR code */
+    flex: 1,
+    marginRight: 12,
+  },
+  rightSection: {
+    width: 100,
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
   },
   contactSection: {
-    marginBottom: 6,
+    marginBottom: 12,
   },
   email: {
     fontSize: 10,
@@ -445,37 +444,6 @@ const styles = StyleSheet.create({
     height: 36,
     marginHorizontal: 10,
     opacity: 0.8,
-  },
-  qrSection: {
-    width: 88,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 4,
-  },
-  qrHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginBottom: 1,
-  },
-  qrHeaderText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#4B5563',
-    textAlign: 'center',
-  },
-  qrSubText: {
-    fontSize: 7,
-    color: '#4B5563',
-    textAlign: 'center',
-    width: '100%',
-  },
-  qrCodeContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginTop: -2,
   },
   horizontalGreenLine: {
     height: 1,
