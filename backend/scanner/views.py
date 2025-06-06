@@ -35,61 +35,274 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     def preprocess_image(self, img):
-        """Preprocess image for better OCR results"""
+        """
+        Advanced image preprocessing for optimal OCR results
+        
+        Args:
+            img: PIL Image object
+            
+        Returns:
+            PIL Image: Preprocessed image optimized for OCR
+        """
+        # Convert to RGB first to handle any color mode
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
         # Convert to grayscale
         img = img.convert('L')
         
-        # Enhance contrast
+        # Resize if image is too small or too large for optimal OCR
+        width, height = img.size
+        if width < 800 or height < 600:
+            # Upscale small images
+            scale_factor = max(800/width, 600/height)
+            new_size = (int(width * scale_factor), int(height * scale_factor))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        elif width > 3000 or height > 3000:
+            # Downscale very large images
+            scale_factor = min(3000/width, 3000/height)
+            new_size = (int(width * scale_factor), int(height * scale_factor))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        # Enhance contrast adaptively
         enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(2)
+        img = enhancer.enhance(1.5)
         
-        # Apply threshold to get black and white image
-        img = img.point(lambda x: 0 if x < 140 else 255)
+        # Enhance sharpness
+        sharpness_enhancer = ImageEnhance.Sharpness(img)
+        img = sharpness_enhancer.enhance(1.2)
         
-        # Apply slight blur to reduce noise
-        img = img.filter(ImageFilter.MedianFilter())
+        # Convert to numpy array for advanced processing
+        img_array = np.array(img)
+        
+        # Apply adaptive thresholding instead of fixed threshold
+        # This works better with varying lighting conditions
+        mean_val = np.mean(img_array)
+        threshold = max(120, min(160, int(mean_val * 0.8)))
+        
+        # Apply threshold
+        img_array = np.where(img_array < threshold, 0, 255)
+        
+        # Convert back to PIL Image
+        img = Image.fromarray(img_array.astype(np.uint8))
+        
+        # Apply noise reduction filter
+        img = img.filter(ImageFilter.MedianFilter(size=3))
+        
+        # Optional: Apply morphological operations to clean up text
+        # This helps connect broken characters
+        img_array = np.array(img)
+        
+        # Simple dilation to connect broken text
+        try:
+            from scipy import ndimage
+            # If scipy is available, use morphological operations
+            kernel = np.ones((2, 2))
+            img_array = ndimage.binary_closing(img_array > 127, structure=kernel).astype(np.uint8) * 255
+            img = Image.fromarray(img_array)
+        except ImportError:
+            # Fallback if scipy is not available - use OpenCV morphological operations
+            try:
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+                img_array = cv2.morphologyEx(img_array, cv2.MORPH_CLOSE, kernel)
+                img = Image.fromarray(img_array)
+            except:
+                pass
         
         return img
 
     def extract_info(self, text):
-        """Extract structured information from OCR text"""
-        # Clean up the text
-        text = ' '.join(text.split())
+        """
+        Enhanced extraction of structured information from OCR text
         
-        # Extract email
-        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-        email_match = re.search(email_pattern, text)
-        email = email_match.group(0) if email_match else None
-
-        # Extract phone numbers (various formats)
-        phone_pattern = r'(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}'
-        phone_matches = re.findall(phone_pattern, text)
-        phone = phone_matches[0] if phone_matches else None
-
-        # Extract name (look for title case words that might be names)
-        name_pattern = r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b'
-        name_matches = re.findall(name_pattern, text)
-        name = name_matches[0] if name_matches else None
-
-        # Extract company (look for all caps words that might be company names)
-        company_pattern = r'\b[A-Z]{2,}(?:\s+[A-Z]{2,})*\b'
-        company_matches = [m for m in re.findall(company_pattern, text) 
-                          if not any(word in m.lower() for word in ['llc', 'inc', 'ltd', 'corp'])]
-        company = company_matches[0] if company_matches else None
-
-        # Extract website
-        website_pattern = r'(?:https?:\/\/)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/\S*)?'
-        website_match = re.search(website_pattern, text)
-        website = website_match.group(0) if website_match else None
-
-        return {
-            'name': name,
-            'email': email,
-            'mobile': phone,
-            'company': company,
-            'website': website
+        Args:
+            text: Raw OCR text string
+            
+        Returns:
+            dict: Structured information dictionary
+        """
+        # Clean and normalize text
+        lines = []
+        for line in text.split('\n'):
+            # Remove extra whitespace and filter out very short lines
+            cleaned_line = ' '.join(line.split())
+            if len(cleaned_line) > 1 and not cleaned_line.isspace():
+                lines.append(cleaned_line)
+        
+        # Initialize result dictionary
+        result = {
+            'name': None,
+            'email': None,
+            'mobile': None,
+            'company': None,
+            'job_title': None,
+            'website': None,
+            'address': None,
+            'social_media': [],
+            'additional_phones': [],
+            'notes': []
         }
-
+        
+        # Enhanced regex patterns
+        patterns = {
+            'email': r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b',
+            'phone': r'(?:\+91\s?)?(?:\d{10}|\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4})',
+            'website': r'(?i)(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/\S*)?',
+            'social_media': r'(?i)(?:linkedin\.com\/in\/|twitter\.com\/|facebook\.com\/|instagram\.com\/|github\.com\/)[\w.-]+',
+            'name': r'^[A-Z][a-z]+(?:\s+[A-Z][a-z\']+){1,3}$',
+            'address': r'(?i)(?:\d+[\/\-,\s]*)?[A-Za-z\s]+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct|place|pl|nagar|colony|sector|block)',
+        }
+        
+        processed_lines = []
+        
+        # First pass: Extract structured data
+        for line in lines:
+            original_line = line
+            line_processed = False
+            
+            # Extract email
+            email_matches = re.findall(patterns['email'], line)
+            if email_matches and not result['email']:
+                result['email'] = email_matches[0].lower()
+                line = re.sub(patterns['email'], '', line).strip()
+                line_processed = True
+            
+            # Extract all phone numbers (improved for Indian numbers)
+            phone_matches = re.findall(patterns['phone'], line)
+            if phone_matches:
+                for phone in phone_matches:
+                    # Clean and validate phone
+                    clean_phone = re.sub(r'[^\d+]', '', phone)
+                    if len(clean_phone) >= 10:
+                        formatted_phone = phone.strip()
+                        if not result['mobile']:
+                            result['mobile'] = formatted_phone
+                        else:
+                            result['additional_phones'].append(formatted_phone)
+                    line = line.replace(phone, '').strip()
+                line_processed = True
+            
+            # Extract website
+            website_matches = re.findall(patterns['website'], line)
+            if website_matches and not result['website']:
+                website = website_matches[0]
+                if not website.startswith('http'):
+                    website = 'https://' + website
+                result['website'] = website
+                line = re.sub(patterns['website'], '', line).strip()
+                line_processed = True
+            
+            # Extract social media
+            social_matches = re.findall(patterns['social_media'], line)
+            if social_matches:
+                for social in social_matches:
+                    full_social = 'https://' + social if not social.startswith('http') else social
+                    if full_social not in result['social_media']:
+                        result['social_media'].append(full_social)
+                line = re.sub(patterns['social_media'], '', line).strip()
+                line_processed = True
+            
+            # Keep remaining content for further processing
+            if line.strip():
+                processed_lines.append(line.strip())
+            elif not line_processed and original_line.strip():
+                processed_lines.append(original_line.strip())
+        
+        # Second pass: Extract name, company, job title, and address
+        remaining_lines = processed_lines.copy()
+        
+        # Extract name (look for proper name patterns)
+        name_candidates = []
+        for i, line in enumerate(remaining_lines):
+            # More flexible name matching
+            if (re.match(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z\']+){1,3}$', line) or
+                (len(line.split()) >= 2 and len(line.split()) <= 4 and 
+                 all(word[0].isupper() for word in line.split() if word))):
+                name_candidates.append((i, line))
+        
+        if name_candidates:
+            # Choose the first name-like pattern
+            idx, name = name_candidates[0]
+            result['name'] = name
+            remaining_lines.pop(idx)
+        
+        # Extract job title using expanded keywords
+        job_keywords = [
+            'manager', 'director', 'head', 'chief', 'senior', 'junior', 'lead',
+            'ceo', 'cto', 'cfo', 'coo', 'president', 'vice president', 'vp',
+            'founder', 'co-founder', 'owner', 'partner', 'principal',
+            'engineer', 'developer', 'analyst', 'consultant', 'specialist',
+            'coordinator', 'supervisor', 'administrator', 'executive',
+            'associate', 'assistant', 'representative', 'agent', 'officer',
+            'business head', 'team lead', 'project manager'
+        ]
+        
+        for i, line in enumerate(remaining_lines):
+            if any(keyword in line.lower() for keyword in job_keywords):
+                result['job_title'] = line
+                remaining_lines.pop(i)
+                break
+        
+        # Extract address (improved for Indian addresses)
+        address_lines = []
+        for i in reversed(range(len(remaining_lines))):
+            line = remaining_lines[i]
+            if (re.search(patterns['address'], line, re.IGNORECASE) or
+                any(indicator in line.lower() for indicator in 
+                    ['city', 'state', 'zip', 'postal', 'pin', 'bangalore', 'bengaluru', 
+                     'nagar', 'colony', 'sector', 'block', 'road', 'street'])):
+                address_lines.insert(0, line)
+                remaining_lines.pop(i)
+        
+        if address_lines:
+            result['address'] = ', '.join(address_lines)
+        
+        # Extract company name (remaining prominent lines)
+        if remaining_lines:
+            # Look for lines with capital letters or common company indicators
+            company_indicators = [
+                'inc', 'llc', 'ltd', 'corp', 'company', 'group', 'solutions', 
+                'services', 'technologies', 'systems', 'enterprises', 'pvt',
+                'private', 'limited', 'co', 'corporation'
+            ]
+            
+            for i, line in enumerate(remaining_lines):
+                if (any(indicator in line.lower() for indicator in company_indicators) or
+                    sum(1 for c in line if c.isupper()) >= 2 or
+                    (len(line) > 5 and not any(keyword in line.lower() for keyword in job_keywords))):
+                    result['company'] = line
+                    remaining_lines.pop(i)
+                    break
+            
+            # If no company found with indicators, use the first substantial line
+            if not result['company'] and remaining_lines:
+                for i, line in enumerate(remaining_lines):
+                    if len(line) > 3 and not line.lower().startswith(('the', 'and', 'or')):
+                        result['company'] = line
+                        remaining_lines.pop(i)
+                        break
+        
+        # Store remaining lines as notes
+        if remaining_lines:
+            result['notes'] = remaining_lines
+        
+        # Clean up empty lists and None values for better output
+        if not result['social_media']:
+            del result['social_media']
+        if not result['additional_phones']:
+            del result['additional_phones']
+        if not result['notes']:
+            result['notes'] = None
+        
+        # Post-process: Clean up extracted data
+        for key, value in result.items():
+            if isinstance(value, str):
+                result[key] = value.strip()
+            elif isinstance(value, list):
+                result[key] = [item.strip() if isinstance(item, str) else item for item in value]
+        
+        return result
+    
     def process_qr_code(self, image):
         """Process image to detect and decode QR codes"""
         try:
@@ -110,6 +323,54 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             print(f"QR processing error: {str(e)}")
             return None
 
+    def extract_text_with_multiple_configs(self, img):
+        """Extract text using multiple OCR configurations and return the best result"""
+        ocr_configs = [
+            r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.-+()/', 
+            r'--oem 3 --psm 4',
+            r'--oem 3 --psm 11',
+            r'--oem 3 --psm 3',
+            r'--oem 3 --psm 1'
+        ]
+        
+        best_text = ''
+        best_confidence = 0
+        
+        for config in ocr_configs:
+            try:
+                # Preprocess image for better OCR
+                processed_img = self.preprocess_image(img.copy())
+                
+                # Extract text with current configuration
+                current_text = pytesseract.image_to_string(processed_img, config=config)
+                
+                # Calculate a simple confidence score based on meaningful content
+                lines = [line.strip() for line in current_text.split('\n') if line.strip()]
+                meaningful_lines = len([line for line in lines if len(line) > 2])
+                has_email = bool(re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', current_text))
+                has_phone = bool(re.search(r'\+?[\d\s\-\(\)]{10,}', current_text))
+                has_website = bool(re.search(r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', current_text))
+                
+                # Simple scoring system
+                confidence = meaningful_lines + (has_email * 5) + (has_phone * 3) + (has_website * 2)
+                
+                if confidence > best_confidence:
+                    best_text = current_text
+                    best_confidence = confidence
+                    
+            except Exception as e:
+                print(f"OCR config {config} failed: {str(e)}")
+                continue
+        
+        # If no good result, try with original image
+        if not best_text.strip():
+            try:
+                best_text = pytesseract.image_to_string(img, config='--psm 6')
+            except:
+                best_text = pytesseract.image_to_string(img)
+        
+        return best_text
+
     @action(detail=False, methods=['POST'])
     def scan_card(self, request):
         if 'image' not in request.FILES:
@@ -127,54 +388,93 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             img_bytes = BytesIO(img_data)
             img = Image.open(img_bytes)
             
-            # First try to detect and process QR code
-            qr_data = self.process_qr_code(img)
-            if qr_data:
-                # Save QR code data to database
-                business_card = BusinessCard.objects.create(
-                    name=f"QR Code - {qr_data[0][:20]}..." if qr_data else "QR Code",
-                    notes="QR Code Data: " + "\n".join(qr_data) if qr_data else "QR Code"
-                )
-                
-                # Save the image file
-                img_bytes.seek(0)  # Reset file pointer
-                business_card.image.save(
-                    f"qr_code_{business_card.id}.{image_file.name.split('.')[-1]}",
-                    img_bytes,
-                    save=True
-                )
-                
-                serializer = self.get_serializer(business_card, context={'request': request})
-                return Response({
-                    'type': 'qr_code',
-                    'data': qr_data,
-                    'business_card': serializer.data,
-                    'message': 'QR code detected and saved successfully'
-                }, status=status.HTTP_201_CREATED)
+            # ALWAYS try OCR first for business card data extraction
+            print("Starting OCR text extraction...")
+            best_text = self.extract_text_with_multiple_configs(img)
             
-            # If no QR code, process as business card
-            # Preprocess image for better OCR
-            processed_img = self.preprocess_image(img)
-            
-            # Extract text using Tesseract with custom configuration
-            custom_config = r'--oem 3 --psd 6 -c preserve_interword_spaces=1'
-            text = pytesseract.image_to_string(processed_img, config=custom_config)
-            
-            # If no text detected, try with different configurations
-            if not text.strip():
-                text = pytesseract.image_to_string(img, config='--psm 6')
+            # Clean up the extracted text
+            text = '\n'.join([line.strip() for line in best_text.split('\n') if line.strip()])
+            print(f"Extracted text: {text}")
             
             # Extract information from the text
             info = self.extract_info(text)
+            print(f"Extracted info: {info}")
             
-            # Create a new BusinessCard instance
+            # Also check for QR code (but don't prioritize it over business card data)
+            qr_data = self.process_qr_code(img)
+            
+            # Post-processing improvements for better data extraction
+            
+            # If we didn't find a name but have email, try to extract name from email
+            if not info['name'] and info['email']:
+                name_part = info['email'].split('@')[0]
+                # Remove numbers and special chars, replace dots and underscores with spaces
+                name_guess = re.sub(r'[^a-zA-Z. ]+', '', name_part.replace('.', ' ').replace('_', ' ')).title()
+                if len(name_guess.split()) >= 2:  # If we got something that looks like a name
+                    info['name'] = name_guess
+            
+            # Try to find name from the first substantial line if still not found
+            if not info['name'] and text:
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                for line in lines[:3]:  # Check first 3 lines
+                    # Look for name-like patterns
+                    if (len(line.split()) >= 2 and len(line.split()) <= 4 and 
+                        len(line) > 5 and len(line) < 50 and
+                        not any(char.isdigit() for char in line) and
+                        not '@' in line and not '.' in line):
+                        info['name'] = line
+                        break
+            
+            # Improve company extraction
+            if not info['company'] and text:
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                # Look for company-like lines (usually have distinctive patterns)
+                for line in lines:
+                    if (len(line) > 3 and 
+                        (line.endswith('.com') or 
+                         any(indicator in line.lower() for indicator in ['solutions', 'technologies', 'systems', 'services']) or
+                         (sum(1 for c in line if c.isupper()) >= 2 and len(line) > 8))):
+                        if line != info['name'] and line != info['job_title']:
+                            info['company'] = line
+                            break
+            
+            # Clean up the notes to avoid duplication
+            if info.get('notes'):
+                if isinstance(info['notes'], list):
+                    clean_notes = []
+                    for note in info['notes']:
+                        # Skip notes that are already captured in other fields
+                        if (note and note != info.get('name') and 
+                            note != info.get('email') and 
+                            note != info.get('mobile') and
+                            note != info.get('company') and
+                            note != info.get('job_title') and
+                            note != info.get('website') and
+                            len(note) > 2):
+                            clean_notes.append(note)
+                    info['notes'] = clean_notes if clean_notes else None
+            
+            # Build notes section
+            notes_parts = []
+            if qr_data:
+                notes_parts.append(f"QR Code Data: {', '.join(qr_data)}")
+            notes_parts.append(f"Extracted Text:\n{text}")
+            if info.get('notes'):
+                if isinstance(info['notes'], list):
+                    notes_parts.extend(info['notes'])
+                else:
+                    notes_parts.append(str(info['notes']))
+            
+            # Create a new BusinessCard instance with extracted data
             business_card = BusinessCard(
-                name=info.get('name', 'Unknown'),
+                name=info.get('name') or 'Unknown',
                 email=info.get('email'),
                 mobile=info.get('mobile'),
                 company=info.get('company'),
+                job_title=info.get('job_title'),
                 website=info.get('website'),
-                notes=f"Extracted text:\n{text}"
+                address=info.get('address'),
+                notes='\n'.join(notes_parts) if notes_parts else None
             )
             
             # Save the business card first to get an ID
@@ -188,21 +488,32 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 save=True
             )
             
-            # Update the business card with the extracted information
+            # Update the business card with the final data
             business_card.save()
             
             serializer = self.get_serializer(business_card, context={'request': request})
-            return Response({
+            
+            response_data = {
                 'type': 'business_card',
                 'data': serializer.data,
                 'message': 'Business card processed and saved successfully',
-                'extracted_text': text
-            }, status=status.HTTP_201_CREATED)
+                'extracted_text': text,
+                'extracted_info': info
+            }
+            
+            # Add QR code info if present
+            if qr_data:
+                response_data['qr_code_data'] = qr_data
+                response_data['message'] += ' (QR code also detected)'
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error processing image: {error_trace}")
             return Response({
                 'error': str(e),
-                'traceback': traceback.format_exc(),
+                'traceback': error_trace,
                 'message': 'Error processing the image'
             }, status=status.HTTP_400_BAD_REQUEST)
