@@ -282,17 +282,27 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                         remaining_lines.pop(i)
                         break
         
-        # Store remaining lines as notes
+        # Store remaining lines as notes - ONLY meaningful remaining content
         if remaining_lines:
-            result['notes'] = remaining_lines
+            # Filter out junk and very short lines
+            meaningful_notes = []
+            for line in remaining_lines:
+                # Skip single characters, numbers, or very short meaningless text
+                if (len(line) > 3 and 
+                    not line.isdigit() and 
+                    not re.match(r'^[^a-zA-Z]*$', line) and  # Skip non-alphabetic lines
+                    len(line.split()) >= 2):  # Must have at least 2 words
+                    meaningful_notes.append(line)
+            
+            result['notes'] = meaningful_notes if meaningful_notes else None
+        else:
+            result['notes'] = None
         
         # Clean up empty lists and None values for better output
         if not result['social_media']:
             del result['social_media']
         if not result['additional_phones']:
             del result['additional_phones']
-        if not result['notes']:
-            result['notes'] = None
         
         # Post-process: Clean up extracted data
         for key, value in result.items():
@@ -438,32 +448,38 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                             info['company'] = line
                             break
             
-            # Clean up the notes to avoid duplication
+            # Clean up the notes to avoid duplication and raw text dump
+            clean_notes = None
             if info.get('notes'):
                 if isinstance(info['notes'], list):
-                    clean_notes = []
+                    clean_notes_list = []
                     for note in info['notes']:
                         # Skip notes that are already captured in other fields
-                        if (note and note != info.get('name') and 
+                        # Also skip single characters, random text, and OCR artifacts
+                        if (note and 
+                            note != info.get('name') and 
                             note != info.get('email') and 
                             note != info.get('mobile') and
                             note != info.get('company') and
                             note != info.get('job_title') and
                             note != info.get('website') and
-                            len(note) > 2):
-                            clean_notes.append(note)
-                    info['notes'] = clean_notes if clean_notes else None
+                            note != info.get('address') and
+                            len(note) > 10 and  # Minimum meaningful length
+                            not note.isdigit() and  # Skip pure numbers
+                            not re.match(r'^[^a-zA-Z]*$', note) and  # Skip non-alphabetic
+                            ' ' in note):  # Must contain spaces (multiple words)
+                            clean_notes_list.append(note)
+                    
+                    # Only keep notes if we have meaningful content
+                    if clean_notes_list:
+                        clean_notes = ' | '.join(clean_notes_list[:3])  # Limit to 3 most relevant notes
             
-            # Build notes section
-            notes_parts = []
+            # Build a simple notes section without raw text dump
+            final_notes = []
             if qr_data:
-                notes_parts.append(f"QR Code Data: {', '.join(qr_data)}")
-            notes_parts.append(f"Extracted Text:\n{text}")
-            if info.get('notes'):
-                if isinstance(info['notes'], list):
-                    notes_parts.extend(info['notes'])
-                else:
-                    notes_parts.append(str(info['notes']))
+                final_notes.append(f"QR Code: {qr_data[0]}")  # Only first QR code
+            if clean_notes:
+                final_notes.append(clean_notes)
             
             # Create a new BusinessCard instance with extracted data
             business_card = BusinessCard(
@@ -474,7 +490,7 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 job_title=info.get('job_title'),
                 website=info.get('website'),
                 address=info.get('address'),
-                notes='\n'.join(notes_parts) if notes_parts else None
+                notes=' | '.join(final_notes) if final_notes else None
             )
             
             # Save the business card first to get an ID
@@ -497,7 +513,6 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 'type': 'business_card',
                 'data': serializer.data,
                 'message': 'Business card processed and saved successfully',
-                'extracted_text': text,
                 'extracted_info': info
             }
             

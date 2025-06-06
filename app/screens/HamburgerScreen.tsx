@@ -168,36 +168,10 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
               title="Edit Profile"
               hasArrow
               onPress={() => {
-                router.push('/screens/EditProfileScreen');
-              }}
-            />
-            <MenuItem
-              icon="notifications-outline"
-              title="Notifications"
-              hasSwitch
-            />
-            <MenuItem
-              icon="help-circle-outline"
-              title="Help & support"
-              hasArrow
-              onPress={() => {
-                // Navigation logic here
-              }}
-            />
-            <MenuItem
-              icon="information-circle-outline"
-              title="About us"
-              hasArrow
-              onPress={() => {
-                // Navigation logic here
-              }}
-            />
-            <MenuItem
-              icon="person-add-outline"
-              title="Invite a friend"
-              hasArrow
-              onPress={() => {
-                // Navigation logic here
+                router.replace({
+                  pathname: '/screens/EditProfileScreen',
+                  params: { from: 'hamburger' }
+                });
               }}
             />
             <MenuItem
@@ -205,7 +179,11 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
               title="Log out"
               isLogout
               onPress={() => {
-                // Logout logic here
+                // Reset navigation stack and navigate to login
+                router.replace({
+                  pathname: '/screens/LoginScreen',
+                  params: { from: 'logout' }
+                });
               }}
             />
           </View>

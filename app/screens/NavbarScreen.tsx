@@ -70,75 +70,81 @@ const NavbarScreen: React.FC = () => {
   const NavigationBar = () => (
     <View style={styles.navigationBar}>
       <View style={styles.navigationBarContent}>
+        {/* Home Button */}
         <TouchableOpacity
           style={[
             styles.navigationButton,
-            activeTab === 'home' && styles.activeNavigationButton
+            activeTab === 'home' && [styles.activeNavigationButton]
           ]}
           onPress={() => setActiveTab('home')}
         >
-          <Ionicons
-            name={activeTab === 'home' ? 'home' : 'home-outline'}
-            size={24}
-            color="#fff"
-          />
-          <Text style={styles.navigationButtonText}>Home</Text>
+          <View style={[styles.iconContainer, activeTab === 'home' && { backgroundColor: '#fff' }]}>
+            <Ionicons
+              name="home"
+              size={24}
+              color={activeTab === 'home' ? '#8ac041' : '#fff'}
+            />
+          </View>
         </TouchableOpacity>
 
+        {/* Scan QR Button (Hidden but preserving logic) */}
         <TouchableOpacity 
-          style={[
-            styles.navigationButton,
-            activeTab === 'scan-qr' && styles.activeNavigationButton
-          ]}
+          style={[styles.hiddenButton]}
           onPress={() => {
             setActiveTab('scan-qr');
             router.push('/scanner' as any);
           }}
         >
-          <Ionicons name="qr-code" size={24} color="#fff" />
-          <Text style={styles.navigationButtonText}>Scan QR</Text>
         </TouchableOpacity>
 
+        {/* Scan Card Button (Hidden but preserving logic) */}
         <TouchableOpacity 
-          style={[
-            styles.navigationButton,
-            activeTab === 'scan-card' && styles.activeNavigationButton
-          ]}
+          style={[styles.hiddenButton]}
           onPress={() => {
             setActiveTab('scan-card');
             router.push('/screens/ScannerScreen' as any);
           }}
         >
-          <Ionicons name="camera" size={24} color="#fff" />
-          <Text style={styles.navigationButtonText}>Scan Card</Text>
         </TouchableOpacity>
 
+        {/* Add Button */}
         <TouchableOpacity 
           style={[
             styles.navigationButton,
-            activeTab === 'add' && styles.activeNavigationButton
+            activeTab === 'add' && [styles.activeNavigationButton]
           ]}
           onPress={() => {
             setActiveTab('add');
             router.push('/screens/AddManually' as any);
           }}
         >
-          <Ionicons name="add-circle" size={24} color="#fff" />
-          <Text style={styles.navigationButtonText}>Add</Text>
+          <View style={[styles.iconContainer, activeTab === 'add' && { backgroundColor: '#fff' }]}>
+            <Ionicons 
+              name="add" 
+              size={28} 
+              color={activeTab === 'add' ? '#8ac041' : '#fff'} 
+            />
+          </View>
         </TouchableOpacity>
 
+        {/* Settings Button */}
         <TouchableOpacity
           style={[
             styles.navigationButton,
-            activeTab === 'settings' && styles.activeNavigationButton
+            activeTab === 'settings' && [styles.activeNavigationButton]
           ]}
           onPress={() => {
             setActiveTab('settings');
             router.push('/settings' as any);
           }}
         >
-          <Ionicons name="settings-outline" size={24} color="#fff" />
-          <Text style={styles.navigationButtonText}>Settings</Text>
+          <View style={[styles.iconContainer, activeTab === 'settings' && { backgroundColor: '#fff' }]}>
+            <Ionicons 
+              name="settings" 
+              size={24} 
+              color={activeTab === 'settings' ? '#8ac041' : '#fff'} 
+            />
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -157,7 +163,7 @@ const NavbarScreen: React.FC = () => {
               style={styles.emptyImage}
               resizeMode="contain"
             />
-            <Text style={styles.emptyText}>No Card Found</Text>
+            <Text style={[styles.emptyText, { color: isDark ? colors.text || '#fff' : '#1f2937' }]}>No Card Found</Text>
           </View>
         ) : (
           <BusinessCardList
@@ -166,6 +172,17 @@ const NavbarScreen: React.FC = () => {
             refreshing={loading}
           />
         )}
+        
+        {/* Floating Camera Button */}
+        <TouchableOpacity 
+          style={styles.floatingCameraButton}
+          onPress={() => {
+            setActiveTab('scan-card');
+            router.push('/screens/ScannerScreen' as any);
+          }}
+        >
+          <Ionicons name="camera" size={24} color="#fff" />
+        </TouchableOpacity>
         
         <NavigationBar />
         <HamburgerScreen 
@@ -216,8 +233,16 @@ const styles = StyleSheet.create({
   },
   navigationBar: {
     backgroundColor: '#8ac041',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
   },
   navigationBarContent: {
     flexDirection: 'row',
@@ -226,11 +251,28 @@ const styles = StyleSheet.create({
   },
   navigationButton: {
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 8,
   },
   activeNavigationButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  iconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  hiddenButton: {
+    width: 0,
+    height: 0,
+    opacity: 0,
+    position: 'absolute',
   },
   navigationButtonText: {
     color: '#fff',
@@ -252,6 +294,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
   },
+  floatingCameraButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#8ac041',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
 });
 
-export default NavbarScreen; 
+export default NavbarScreen;
