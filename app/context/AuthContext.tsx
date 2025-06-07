@@ -1,5 +1,7 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useState } from 'react';
+import { API_BASE_URL } from '../config';
+
+
 
 interface User {
   id: string;
@@ -13,8 +15,9 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (userData: SignUpData) => Promise<void>;
+  signUp: (userData: SignUpData) => Promise<User>;
   signOut: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 interface SignUpData {
@@ -28,69 +31,38 @@ interface SignUpData {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Check if user is logged in
-    checkUser();
-  }, []);
-
-  const checkUser = async () => {
-    try {
-      const userJson = await AsyncStorage.getItem('user');
-      if (userJson) {
-        setUser(JSON.parse(userJson));
-      }
-    } catch (error) {
-      console.error('Error checking user:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      // TODO: Implement actual API call to your backend
-      const response = await fetch('YOUR_API_ENDPOINT/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Login failed');
-      }
-
-      const userData = await response.json();
-      await AsyncStorage.setItem('user', JSON.stringify(userData));
-      setUser(userData);
-    } catch (error) {
-      console.error('Sign in error:', error);
-      throw error;
-    }
+    // No authentication needed
+    return Promise.resolve();
   };
 
   const signUp = async (userData: SignUpData) => {
     try {
-      // TODO: Implement actual API call to your backend
-      const response = await fetch('YOUR_API_ENDPOINT/signup', {
+      const response = await fetch(`${API_BASE_URL}/register/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify({
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+          email: userData.email,
+          phone: userData.phone,
+          password: userData.password
+        }),
       });
 
+      const data = await response.json();
+      
       if (!response.ok) {
-        throw new Error('Sign up failed');
+        throw new Error(data.error || 'Sign up failed');
       }
 
-      const newUser = await response.json();
-      await AsyncStorage.setItem('user', JSON.stringify(newUser));
-      setUser(newUser);
+      // Return the created user data
+      return data;
     } catch (error) {
       console.error('Sign up error:', error);
       throw error;
@@ -98,17 +70,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    try {
-      await AsyncStorage.removeItem('user');
-      setUser(null);
-    } catch (error) {
-      console.error('Sign out error:', error);
-      throw error;
-    }
+    // No authentication needed
+    return Promise.resolve();
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signIn, 
+      signUp, 
+      signOut,
+      setUser 
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -11,11 +11,14 @@ import {
   ScrollView, 
   KeyboardAvoidingView,
   Image,
-  StyleSheet
+  StyleSheet,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getResponsiveData, scaleSize } from '../../constants/responsive';
+import { API_BASE_URL } from '../config';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,7 +26,8 @@ const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
-  
+  const [loading, setLoading] = useState(false);
+
   // Update dimensions when screen size changes
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -45,11 +49,42 @@ const LoginScreen: React.FC = () => {
   const buttonWidth = isDesktop ? '90%' : '100%';
   const fontSize = isDesktop ? { title: 28, normal: 16, small: 14 } : { title: 24, normal: 16, small: 14 };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password');
+      return;
+    }
+
     try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/login/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+      
+      // Login successful, navigate to home
       router.replace('/screens/NavbarScreen');
-    } catch (error) {
-      console.error('Error navigating:', error);
+      
+    } catch (error: any) {
+      console.error('Login error:', error);
+      Alert.alert(
+        'Login Failed', 
+        error.message || 'There was an error logging in. Please try again.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -132,12 +167,21 @@ const LoginScreen: React.FC = () => {
 
                 {/* Login Button */}
                 <TouchableOpacity 
-                  style={[styles.loginButton, { width: buttonWidth, height: scaleSize(50) }]}
+                  style={[styles.loginButton, { 
+                    width: buttonWidth, 
+                    height: scaleSize(50),
+                    opacity: loading ? 0.7 : 1
+                  }]}
                   onPress={handleLogin}
+                  disabled={loading}
                 >
-                  <Text style={[styles.loginButtonText, { fontSize: fontSize.normal }]}>
-                    Log in
-                  </Text>
+                  {loading ? (
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    <Text style={[styles.loginButtonText, { fontSize: fontSize.normal }]}>
+                      Log in
+                    </Text>
+                  )}
                 </TouchableOpacity>
 
                 {/* Social Login Section */}
@@ -172,7 +216,7 @@ const LoginScreen: React.FC = () => {
                   <Text style={[styles.signupText, { fontSize: fontSize.small }]}>
                     Don't have an account?{' '}
                   </Text>
-                  <TouchableOpacity>
+                  <TouchableOpacity onPress={() => router.push('/screens/SignupScreen')}>
                     <Text style={[styles.signupLink, { fontSize: fontSize.small }]}>
                       Sign up
                     </Text>

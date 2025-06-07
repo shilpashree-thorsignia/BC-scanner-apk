@@ -7,11 +7,78 @@ from PIL import Image, ImageEnhance, ImageFilter
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import BusinessCard
-from .serializers import BusinessCardSerializer
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from .models import BusinessCard, UserProfile
+from .serializers import BusinessCardSerializer, UserProfileSerializer
 
 # Set Tesseract path (update this path if Tesseract is installed elsewhere)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+class UserRegistrationView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        try:
+            # Create user directly without authentication
+            user = UserProfile.objects.create(
+                first_name=request.data.get('first_name', ''),
+                last_name=request.data.get('last_name', ''),
+                email=request.data.get('email'),
+                phone=request.data.get('phone', ''),
+                password=request.data.get('password', '')  # Storing plain text password as requested
+            )
+            
+            return Response({
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone': user.phone
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class UserLoginView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        if not email or not password:
+            return Response(
+                {'error': 'Email and password are required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = UserProfile.objects.get(email=email)
+            if user.password == password:  # Simple password check (not recommended for production)
+                return Response({
+                    'id': user.id,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'phone': user.phone
+                })
+            else:
+                return Response(
+                    {'error': 'Invalid credentials'}, 
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+                
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class BusinessCardViewSet(viewsets.ModelViewSet):
     queryset = BusinessCard.objects.all()

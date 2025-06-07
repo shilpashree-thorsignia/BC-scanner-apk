@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Camera } from 'expo-camera';
 import { View, StyleSheet, Platform, Dimensions, StatusBar } from 'react-native';
 import ThemeProvider, { useTheme } from './context/ThemeContext';
+import { AuthProvider } from './context/AuthContext';
 
 // This component will use the theme
 function AppLayout() {
@@ -83,12 +84,14 @@ function AppLayout() {
   );
 }
 
-// Root layout that provides the theme
+// Root layout that provides the theme and auth context
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <AppLayout />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider>
+        <AppLayout />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 

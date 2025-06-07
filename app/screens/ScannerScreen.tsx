@@ -6,7 +6,6 @@ import type { CameraCapturedPicture } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { getResponsiveData, scaleSize } from '../../constants/responsive';
 import { scanBusinessCard, createBusinessCard } from '../lib/api';
-import { useTheme } from '../context/ThemeContext';
 
 // Define BusinessCard type locally if the import is not available
 type BusinessCard = {
@@ -79,8 +78,9 @@ const styles = StyleSheet.create({
   },
   headerText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
+    textAlign: 'center',
   },
   topActionBar: {
     position: 'absolute',
@@ -202,7 +202,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginTop: 16,
+  },
+  headerTextAbsolute: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: 'white',
+    fontSize: 17,
+    paddingTop: 10,
+    fontWeight: '600',
+    zIndex: -1, // optional, pushes it behind the buttons if needed
   }
+  
 });
 
 export default function ScannerScreen() {
@@ -211,10 +223,9 @@ export default function ScannerScreen() {
   const [scanSuccess, setScanSuccess] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [manualNameInput, setManualNameInput] = useState<string>('');
-  const router = useRouter();
-  const { isDark, colors } = useTheme();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const router = useRouter();
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
   
   // Update dimensions when screen size changes
@@ -473,7 +484,7 @@ export default function ScannerScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.background : '#00A99D' }]}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.cameraContainer}>
         {/* Camera View without children */}
         <CameraView
@@ -485,17 +496,12 @@ export default function ScannerScreen() {
         
         {/* Header - positioned absolutely over camera */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={iconSize} color="white" />
+          <TouchableOpacity
+          style={{ paddingTop: 10 }}
+          onPress={() => router.back()}>
+            <MaterialIcons name="chevron-left" size={largeIconSize} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerText}>Scan Business Card</Text>
-          <TouchableOpacity onPress={() => setFlashOn(!flashOn)}>
-            <MaterialIcons 
-              name={flashOn ? "flash-on" : "flash-off"} 
-              size={iconSize} 
-              color="white" 
-            />
-          </TouchableOpacity>
+          <Text style={styles.headerTextAbsolute}>Scan Business Card</Text>
         </View>
 
         {/* Card Frame - positioned absolutely over camera */}
@@ -549,9 +555,12 @@ export default function ScannerScreen() {
         <View style={styles.actionBar}>
           <TouchableOpacity 
             style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={() => router.back()}
+            onPress={() => {
+              // TODO: Implement gallery picker
+              Alert.alert('Coming Soon', 'Gallery picker will be implemented soon');
+            }}
           >
-            <MaterialIcons name="arrow-back" size={iconSize} color="#00A99D" />
+            <MaterialIcons name="photo-library" size={iconSize} color="#00A99D" />
           </TouchableOpacity>
           
           <TouchableOpacity 
@@ -568,23 +577,12 @@ export default function ScannerScreen() {
           
           <TouchableOpacity 
             style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={() => setFlashOn(!flashOn)}
+            onPress={() => {
+              // TODO: Implement QR scanner
+              Alert.alert('Coming Sofon', 'QR scanner will be implemented soon');
+            }}
           >
-            <MaterialIcons 
-              name={flashOn ? "flash-on" : "flash-off"} 
-              size={iconSize} 
-              color="#00A99D" 
-            />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={() => router.back()}
-            disabled={processing}
-          >
-            <Text style={styles.actionButtonText}>
-              Done
-            </Text>
+            <MaterialIcons name="qr-code-scanner" size={iconSize} color="#00A99D" />
           </TouchableOpacity>
         </View>
       </View>

@@ -12,17 +12,13 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
-import { RootStackParamList } from '../types/navigation';
+import { router } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
-
-type SignUpScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'SignUp'>;
+import { API_BASE_URL } from '../config';
 
 const SignUpScreen = () => {
-  const navigation = useNavigation<SignUpScreenNavigationProp>();
   const { signUp } = useAuth();
-  const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
@@ -33,15 +29,66 @@ const SignUpScreen = () => {
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
+    // Basic form validation
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
     try {
       setLoading(true);
-      await signUp(formData);
-      navigation.replace('Home');
-    } catch (error) {
+      console.log('Sending signup request...');
+      
+      const response = await fetch(`${API_BASE_URL}/register/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          email: formData.email,
+          phone: formData.phone || '',
+          password: formData.password
+        }),
+      });
+
+      const data = await response.json();
+      console.log('Signup response:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Sign up failed');
+      }
+      
+      // Show success message and navigate back to login
       Alert.alert(
-        'Sign Up Failed',
-        'There was an error creating your account. Please try again.'
+        'Success',
+        'Registration successful!',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.push('/screens/LoginScreen')
+          }
+        ]
       );
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      let errorMessage = 'There was an error creating your account. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('Duplicate entry') && error.message.includes('email')) {
+          errorMessage = 'This email is already registered. Please use a different email or sign in.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Sign Up Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -55,10 +102,10 @@ const SignUpScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
           <TouchableOpacity
-            onPress={() => navigation.goBack()}
+            onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="white" />
+            <Ionicons name="arrow-back" size={24} color="black" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Sign Up</Text>
         </View>
@@ -121,7 +168,7 @@ const SignUpScreen = () => {
           </View>
 
           <TouchableOpacity
-            onPress={() => navigation.navigate('ForgotPassword')}
+            onPress={() => router.push('/screens/LoginScreen')}
           >
             <Text style={styles.forgotPassword}>Forgot Password?</Text>
           </TouchableOpacity>
@@ -165,8 +212,10 @@ const SignUpScreen = () => {
 
           <View style={styles.loginContainer}>
             <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text style={styles.loginLink}>Log in</Text>
+            <TouchableOpacity onPress={() => router.push('/screens/LoginScreen')}>
+              <Text style={styles.loginLink}>
+                Log in
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
