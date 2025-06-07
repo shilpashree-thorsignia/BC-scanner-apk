@@ -40,6 +40,55 @@ class UserRegistrationView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+class UserDetailView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request, user_id, format=None):
+        try:
+            user = UserProfile.objects.get(id=user_id)
+            return Response({
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone': user.phone
+            })
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def patch(self, request, user_id, format=None):
+        try:
+            user = UserProfile.objects.get(id=user_id)
+            
+            # Update user fields if they are in the request
+            for field in ['first_name', 'last_name', 'email', 'phone']:
+                if field in request.data:
+                    setattr(user, field, request.data[field])
+            
+            user.save()
+            
+            return Response({
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone': user.phone
+            })
+            
+        except UserProfile.DoesNotExist:
+            return Response(
+                {'error': 'User not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 class UserLoginView(APIView):
     permission_classes = [AllowAny]
     

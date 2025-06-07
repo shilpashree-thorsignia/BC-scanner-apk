@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getResponsiveData, scaleSize } from '../../constants/responsive';
 import { API_BASE_URL } from '../config';
+import { useAuth } from '../context/AuthContext';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -49,6 +50,8 @@ const LoginScreen: React.FC = () => {
   const buttonWidth = isDesktop ? '90%' : '100%';
   const fontSize = isDesktop ? { title: 28, normal: 16, small: 14 } : { title: 24, normal: 16, small: 14 };
 
+  const { setUser } = useAuth();
+
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter both email and password');
@@ -73,6 +76,15 @@ const LoginScreen: React.FC = () => {
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
       }
+      
+      // Store user data in context
+      setUser({
+        id: data.id.toString(),
+        firstName: data.first_name,
+        lastName: data.last_name,
+        email: data.email,
+        phone: data.phone
+      });
       
       // Login successful, navigate to home
       router.replace('/screens/NavbarScreen');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,20 +14,32 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Calendar } from 'react-native-calendars';
-import { useRouter } from 'expo-router';
+import { Calendar, DateData } from 'react-native-calendars';
+
+interface DayObject {
+  dateString: string;
+  day: number;
+  month: number;
+  year: number;
+  timestamp: number;
+}
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../config';
 
 interface ProfileData {
-  name: string;
+  id: number;
+  first_name: string;
+  last_name: string;
   email: string;
-  dateOfBirth: string;
-  region: string;
-  image: string | null;
+  phone: string;
+  profileImage: string | null;
 }
 
 interface DayObject {
@@ -35,18 +47,23 @@ interface DayObject {
 }
 
 const EditProfileScreen: React.FC = () => {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { isDark, colors } = useTheme();
-  const [profileData, setProfileData] = useState<ProfileData>({
-    name: 'Name',
-    email: 'Email',
-    dateOfBirth: 'DoB',
-    region: 'Location',
-    image: null,
-  });
-
-  const [showCalendar, setShowCalendar] = useState<boolean>(false);
+  const { user, setUser } = useAuth();
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [profileData, setProfileData] = useState<ProfileData>(() => ({
+    id: user?.id ? parseInt(user.id, 10) : 0,
+    first_name: user?.firstName || '',
+    last_name: user?.lastName || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    profileImage: null,
+  }));
 
   const requestPermissions = async (): Promise<boolean> => {
     if (Platform.OS !== 'web') {
@@ -76,7 +93,7 @@ const EditProfileScreen: React.FC = () => {
       });
 
       if (!result.canceled && result.assets[0].uri) {
-        setProfileData({ ...profileData, image: result.assets[0].uri });
+        setProfileData({ ...profileData, profileImage: result.assets[0].uri });
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
@@ -84,48 +101,89 @@ const EditProfileScreen: React.FC = () => {
   };
 
   const handleDateSelect = (day: DayObject): void => {
-    const date = new Date(day.timestamp);
-    const formattedDate = date.toLocaleDateString('en-GB');
-    setProfileData({ ...profileData, dateOfBirth: formattedDate });
+    // Date selection removed as it's not part of our user model
     setShowCalendar(false);
   };
 
   const validateForm = (): boolean => {
-    if (!profileData.name.trim()) {
-      Alert.alert('Error', 'Name is required');
+    if (!profileData.first_name.trim() || !profileData.last_name.trim()) {
+      Alert.alert('Error', 'First name and last name are required');
       return false;
     }
-    
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(profileData.email)) {
       Alert.alert('Error', 'Please enter a valid email address');
       return false;
     }
 
+    if (!profileData.phone.trim()) {
+      Alert.alert('Error', 'Phone number is required');
+      return false;
+    }
+
     return true;
   };
 
-  const handleSave = async (): Promise<void> => {
+  const handleSave = async () => {
     if (!validateForm()) return;
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIsSaving(true);
+
+      const response = await fetch(`${API_BASE_URL}/users/${profileData.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: profileData.first_name,
+          last_name: profileData.last_name,
+          email: profileData.email,
+          phone: profileData.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update profile');
+      }
+
+      // Update user data in context
+      setUser({
+        id: data.id.toString(),
+        firstName: data.first_name,
+        lastName: data.last_name,
+        email: data.email,
+        phone: data.phone,
+      });
+
       Alert.alert('Success', 'Profile updated successfully');
-      console.log('Updated profile:', profileData);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update profile');
+      router.back();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  if (isLoading) {
+    return (
+      <View style={[styles.container, isDark && { backgroundColor: '#1a1a1a' }]}>
+        <ActivityIndicator size="large" color={isDark ? '#fff' : '#8AC041'} />
+      </View>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={[
         styles.container,
-        { 
+        {
           paddingTop: Platform.OS === 'ios' ? insets.top : 25,
-          backgroundColor: isDark ? colors.background : 'white' 
-        }
+          backgroundColor: isDark ? colors.background : 'white',
+        },
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
@@ -137,7 +195,7 @@ const EditProfileScreen: React.FC = () => {
         <Text style={[styles.headerTitle, { color: isDark ? '#fff' : 'black' }]}>Edit Profile</Text>
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -146,9 +204,9 @@ const EditProfileScreen: React.FC = () => {
           <View>
             <View style={styles.imageContainer}>
               <TouchableOpacity onPress={pickImage}>
-                {profileData.image ? (
+                {profileData.profileImage ? (
                   <Image
-                    source={{ uri: profileData.image }}
+                    source={{ uri: profileData.profileImage }}
                     style={styles.profileImage}
                   />
                 ) : (
@@ -162,16 +220,37 @@ const EditProfileScreen: React.FC = () => {
 
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Full Name</Text>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>First Name</Text>
                 <TextInput
-                  style={[styles.input, { 
-                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
-                    color: isDark ? '#fff' : '#374151'
-                  }]}
-                  value={profileData.name}
-                  onChangeText={(text) => setProfileData({ ...profileData, name: text })}
-                  placeholder="Enter your full name"
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
+                      color: isDark ? '#fff' : '#374151',
+                    },
+                  ]}
+                  value={profileData.first_name}
+                  onChangeText={(text) => setProfileData({ ...profileData, first_name: text })}
+                  placeholder="Enter your first name"
+                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Last Name</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
+                      color: isDark ? '#fff' : '#374151',
+                    },
+                  ]}
+                  value={profileData.last_name}
+                  onChangeText={(text) => setProfileData({ ...profileData, last_name: text })}
+                  placeholder="Enter your last name"
                   placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
                 />
               </View>
@@ -179,11 +258,14 @@ const EditProfileScreen: React.FC = () => {
               <View style={styles.inputGroup}>
                 <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Email</Text>
                 <TextInput
-                  style={[styles.input, { 
-                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
-                    color: isDark ? '#fff' : '#374151'
-                  }]}
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
+                      color: isDark ? '#fff' : '#374151',
+                    },
+                  ]}
                   value={profileData.email}
                   onChangeText={(text) => setProfileData({ ...profileData, email: text })}
                   placeholder="Enter your email"
@@ -194,34 +276,18 @@ const EditProfileScreen: React.FC = () => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Date of Birth</Text>
-                <TouchableOpacity 
-                  style={[styles.dateButton, { 
-                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white'
-                  }]}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setShowCalendar(true);
-                  }}
-                >
-                  <Text style={[styles.dateText, { color: isDark ? '#fff' : '#374151' }]}>{profileData.dateOfBirth}</Text>
-                  <Ionicons name="calendar" size={20} color={isDark ? '#fff' : '#374151'} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Country/Region</Text>
+                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Phone Number</Text>
                 <TextInput
                   style={[styles.input, { 
                     borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
                     backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
                     color: isDark ? '#fff' : '#374151'
                   }]}
-                  value={profileData.region}
-                  onChangeText={(text) => setProfileData({ ...profileData, region: text })}
-                  placeholder="Enter your location"
+                  value={profileData.phone}
+                  onChangeText={(text) => setProfileData({ ...profileData, phone: text })}
+                  placeholder="Enter your phone number"
                   placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
+                  keyboardType="phone-pad"
                 />
               </View>
 
@@ -248,12 +314,7 @@ const EditProfileScreen: React.FC = () => {
                 <Calendar
                   onDayPress={handleDateSelect}
                   maxDate={new Date().toISOString().split('T')[0]}
-                  markedDates={{
-                    [profileData.dateOfBirth.split('/').reverse().join('-')]: {
-                      selected: true,
-                      selectedColor: isDark ? '#fff' : '#8AC041',
-                    },
-                  }}
+                  markedDates={{}}
                   theme={{
                     selectedDayBackgroundColor: isDark ? '#fff' : '#8AC041',
                     todayTextColor: isDark ? '#fff' : '#8AC041',
