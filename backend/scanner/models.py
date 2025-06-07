@@ -26,4 +26,24 @@ class BusinessCard(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name 
+        return self.name
+
+class EmailConfig(models.Model):
+    is_enabled = models.BooleanField(default=False, help_text="Enable or disable automated email notifications")
+    sender_email = models.EmailField(max_length=255, help_text="Email address to send notifications from")
+    sender_password = models.CharField(max_length=255, help_text="App password or email account password")
+    recipient_email = models.EmailField(max_length=255, help_text="Email address to receive notifications")
+    smtp_host = models.CharField(max_length=255, default='smtp.gmail.com', help_text="SMTP server hostname")
+    smtp_port = models.CharField(max_length=10, default='587', help_text="SMTP server port")
+    email_subject = models.CharField(max_length=255, default='New Business Card Scanned', help_text="Subject line for automated emails")
+    email_template = models.TextField(default='A new business card has been scanned and added to your collection.', help_text="Email message template")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Email Configuration"
+        verbose_name_plural = "Email Configurations"
+
+    def __str__(self):
+        status = "Enabled" if self.is_enabled else "Disabled"
+        return f"Email Config - {status} ({self.sender_email} → {self.recipient_email})" 

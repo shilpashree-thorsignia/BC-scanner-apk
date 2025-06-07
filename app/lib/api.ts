@@ -14,6 +14,20 @@ export interface BusinessCard {
   created_at: string;
 }
 
+export interface EmailConfig {
+  id: number;
+  is_enabled: boolean;
+  sender_email: string;
+  sender_password: string;
+  recipient_email: string;
+  smtp_host: string;
+  smtp_port: string;
+  email_subject: string;
+  email_template: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CreateCardData {
   name: string;
   email?: string;
@@ -23,6 +37,17 @@ export interface CreateCardData {
   website?: string;
   address?: string;
   notes?: string;
+}
+
+export interface CreateEmailConfigData {
+  is_enabled: boolean;
+  sender_email: string;
+  sender_password: string;
+  recipient_email: string;
+  smtp_host: string;
+  smtp_port: string;
+  email_subject: string;
+  email_template: string;
 }
 
 export const scanBusinessCard = async (imageUri: string): Promise<BusinessCard> => {
@@ -116,10 +141,102 @@ export const getAllBusinessCards = async (): Promise<BusinessCard[]> => {
   }
 };
 
+export const createEmailConfig = async (data: CreateEmailConfigData): Promise<EmailConfig> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/email-config/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create email configuration');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error creating email configuration:', error);
+    throw error;
+  }
+};
+
+export const getEmailConfig = async (): Promise<EmailConfig | null> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/email-config/`);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // No configuration exists yet
+      }
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch email configuration: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching email configuration:', error);
+    throw error;
+  }
+};
+
+export const updateEmailConfig = async (id: number, data: CreateEmailConfigData): Promise<EmailConfig> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/email-config/${id}/`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update email configuration');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error updating email configuration:', error);
+    throw error;
+  }
+};
+
+export const testEmailConfig = async (id: number): Promise<{ success: boolean; message: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/email-config/${id}/test/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to test email configuration');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error testing email configuration:', error);
+    throw error;
+  }
+};
+
 const api = {
   scanBusinessCard,
   createBusinessCard,
-  getAllBusinessCards
+  getAllBusinessCards,
+  createEmailConfig,
+  getEmailConfig,
+  updateEmailConfig,
+  testEmailConfig
 };
 
 export default api;

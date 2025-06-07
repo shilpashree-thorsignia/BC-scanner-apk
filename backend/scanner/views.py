@@ -9,8 +9,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
-from .models import BusinessCard, UserProfile
-from .serializers import BusinessCardSerializer, UserProfileSerializer
+from .models import BusinessCard, UserProfile, EmailConfig
+from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
 
 # Set Tesseract path (update this path if Tesseract is installed elsewhere)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -648,3 +648,171 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 'traceback': error_trace,
                 'message': 'Error processing the image'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailConfigViewSet(viewsets.ModelViewSet):
+    queryset = EmailConfig.objects.all()
+    serializer_class = EmailConfigSerializer
+    permission_classes = [AllowAny]
+    
+    def list(self, request, *args, **kwargs):
+        """Get the email configuration (there should only be one)"""
+        try:
+            config = EmailConfig.objects.first()
+            if config:
+                serializer = self.get_serializer(config)
+                return Response(serializer.data)
+            else:
+                return Response(
+                    {'error': 'No email configuration found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def create(self, request, *args, **kwargs):
+        """Create or update email configuration (singleton pattern)"""
+        try:
+            # Check if configuration already exists
+            existing_config = EmailConfig.objects.first()
+            
+            if existing_config:
+                # Update existing configuration
+                serializer = self.get_serializer(existing_config, data=request.data, partial=False)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            else:
+                # Create new configuration
+                serializer = self.get_serializer(data=request.data)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def update(self, request, *args, **kwargs):
+        """Update email configuration"""
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=False)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def partial_update(self, request, *args, **kwargs):
+        """Partially update email configuration"""
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=True, methods=['POST'])
+    def test(self, request, pk=None):
+        """Test email configuration by sending a test email"""
+        try:
+            config = self.get_object()
+            
+            if not config.is_enabled:
+                return Response(
+                    {'success': False, 'message': 'Email configuration is disabled'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Test email sending
+            success, message = self.send_test_email(config)
+            
+            return Response({
+                'success': success,
+                'message': message
+            }, status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response(
+                {'success': False, 'message': f'Test failed: {str(e)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def send_test_email(self, config):
+        """
+        Send a test email using the provided configuration
+        
+        Args:
+            config: EmailConfig instance
+            
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            
+            # Create message
+            msg = MIMEMultipart()
+            msg['From'] = config.sender_email
+            msg['To'] = config.recipient_email
+            msg['Subject'] = f"Test - {config.email_subject}"
+            
+            # Email body
+            body = f"""
+This is a test email from your Business Card Scanner app.
+
+Configuration Details:
+- SMTP Host: {config.smtp_host}
+- SMTP Port: {config.smtp_port}
+- Sender: {config.sender_email}
+- Recipient: {config.recipient_email}
+
+Template Message:
+{config.email_template}
+
+If you received this email, your automated email configuration is working correctly!
+
+---
+Business Card Scanner App
+            """.strip()
+            
+            msg.attach(MIMEText(body, 'plain'))
+            
+            # Create SMTP session
+            server = smtplib.SMTP(config.smtp_host, int(config.smtp_port))
+            server.starttls()  # Enable security
+            server.login(config.sender_email, config.sender_password)
+            
+            # Send email
+            text = msg.as_string()
+            server.sendmail(config.sender_email, config.recipient_email, text)
+            server.quit()
+            
+            return True, "Test email sent successfully!"
+            
+        except smtplib.SMTPAuthenticationError:
+            return False, "Authentication failed. Please check your email and password."
+        except smtplib.SMTPRecipientsRefused:
+            return False, "Recipient email address was refused by the server."
+        except smtplib.SMTPServerDisconnected:
+            return False, "Connection to SMTP server was lost."
+        except smtplib.SMTPConnectError:
+            return False, f"Could not connect to SMTP server {config.smtp_host}:{config.smtp_port}"
+        except Exception as e:
+            return False, f"Email sending failed: {str(e)}"

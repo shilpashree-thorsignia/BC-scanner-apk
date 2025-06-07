@@ -143,6 +143,10 @@ export default function SettingsScreen() {
           {/* <ListItem title="Prompt for card sharing" onPress={() => {}} /> */}
           <ListItem title="Edit groups" onPress={() => {}} />
           <ListItem 
+            title="Configure automated mails" 
+            onPress={() => router.push('/screens/autoMailConfig')}
+          />
+          <ListItem 
             title={isExporting ? "Exporting..." : "Export all cards"} 
             onPress={handleExportAllCards}
             disabled={isExporting}

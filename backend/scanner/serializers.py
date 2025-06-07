@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import BusinessCard, UserProfile
+from .models import BusinessCard, UserProfile, EmailConfig
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
 
@@ -53,3 +53,57 @@ class UserProfileSerializer(serializers.ModelSerializer):
         # Hash the password before saving
         validated_data['password'] = make_password(validated_data['password'])
         return super().create(validated_data)
+
+
+class EmailConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailConfig
+        fields = [
+            'id',
+            'is_enabled',
+            'sender_email',
+            'sender_password',
+            'recipient_email',
+            'smtp_host',
+            'smtp_port',
+            'email_subject',
+            'email_template',
+            'created_at',
+            'updated_at'
+        ]
+        extra_kwargs = {
+            'sender_password': {'write_only': True},  # Don't return password in responses
+        }
+    
+    def validate_smtp_port(self, value):
+        """Validate SMTP port is a valid number"""
+        try:
+            port = int(value)
+            if port < 1 or port > 65535:
+                raise serializers.ValidationError("Port must be between 1 and 65535")
+            return value
+        except ValueError:
+            raise serializers.ValidationError("Port must be a valid number")
+    
+    def validate_sender_email(self, value):
+        """Validate sender email format"""
+        if not value:
+            raise serializers.ValidationError("Sender email is required when enabled")
+        return value.lower()
+    
+    def validate_recipient_email(self, value):
+        """Validate recipient email format"""
+        if not value:
+            raise serializers.ValidationError("Recipient email is required when enabled")
+        return value.lower()
+    
+    def validate(self, attrs):
+        """Cross-field validation"""
+        if attrs.get('is_enabled', False):
+            required_fields = ['sender_email', 'sender_password', 'recipient_email']
+            for field in required_fields:
+                if not attrs.get(field):
+                    raise serializers.ValidationError({
+                        field: f"{field.replace('_', ' ').title()} is required when email automation is enabled"
+                    })
+        return attrs

@@ -148,7 +148,7 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
               <TouchableOpacity 
                 style={styles.profileActionButton}
                 onPress={() => {
-                  router.push('/screens/EditProfileScreen');
+                  router.push('/screens/ProfileScreen');
                   onClose();
                 }}
               >
@@ -165,11 +165,11 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
           <View style={styles.menuItems}>
             <MenuItem
               icon="person-outline"
-              title="Edit Profile"
+              title="Profile"
               hasArrow
               onPress={() => {
                 router.replace({
-                  pathname: '/screens/EditProfileScreen',
+                  pathname: '/screens/ProfileScreen',
                   params: { from: 'hamburger' }
                 });
               }}

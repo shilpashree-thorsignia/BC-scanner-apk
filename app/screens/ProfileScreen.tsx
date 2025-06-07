@@ -8,8 +8,6 @@ import {
   SafeAreaView,
   Alert,
   Platform,
-  Modal,
-  TouchableWithoutFeedback,
   ScrollView,
   KeyboardAvoidingView,
   Keyboard,
@@ -18,16 +16,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Calendar, DateData } from 'react-native-calendars';
-
-interface DayObject {
-  dateString: string;
-  day: number;
-  month: number;
-  year: number;
-  timestamp: number;
-}
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -42,20 +31,17 @@ interface ProfileData {
   profileImage: string | null;
 }
 
-interface DayObject {
-  timestamp: number;
-}
-
-const EditProfileScreen: React.FC = () => {
+const ProfileScreen: React.FC = () => {
   const { isDark, colors } = useTheme();
   const { user, setUser } = useAuth();
   const router = useRouter();
-  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  const [showCalendar, setShowCalendar] = useState(false);
+  
+  const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
   const [profileData, setProfileData] = useState<ProfileData>(() => ({
     id: user?.id ? parseInt(user.id, 10) : 0,
     first_name: user?.firstName || '',
@@ -64,6 +50,8 @@ const EditProfileScreen: React.FC = () => {
     phone: user?.phone || '',
     profileImage: null,
   }));
+
+  const [originalData, setOriginalData] = useState<ProfileData>(profileData);
 
   const requestPermissions = async (): Promise<boolean> => {
     if (Platform.OS !== 'web') {
@@ -81,6 +69,8 @@ const EditProfileScreen: React.FC = () => {
   };
 
   const pickImage = async (): Promise<void> => {
+    if (!isEditing) return;
+    
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
@@ -98,11 +88,6 @@ const EditProfileScreen: React.FC = () => {
     } catch (error) {
       Alert.alert('Error', 'Failed to pick image');
     }
-  };
-
-  const handleDateSelect = (day: DayObject): void => {
-    // Date selection removed as it's not part of our user model
-    setShowCalendar(false);
   };
 
   const validateForm = (): boolean => {
@@ -125,11 +110,23 @@ const EditProfileScreen: React.FC = () => {
     return true;
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+    setOriginalData({ ...profileData });
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setProfileData({ ...originalData });
+    setError(null);
+  };
+
   const handleSave = async () => {
     if (!validateForm()) return;
 
     try {
       setIsSaving(true);
+      setError(null);
 
       const response = await fetch(`${API_BASE_URL}/users/${profileData.id}/`, {
         method: 'PATCH',
@@ -159,8 +156,11 @@ const EditProfileScreen: React.FC = () => {
         phone: data.phone,
       });
 
+      // Update local state
+      setOriginalData({ ...profileData });
+      setIsEditing(false);
+      
       Alert.alert('Success', 'Profile updated successfully');
-      router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile');
     } finally {
@@ -170,8 +170,8 @@ const EditProfileScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, isDark && { backgroundColor: '#1a1a1a' }]}>
-        <ActivityIndicator size="large" color={isDark ? '#fff' : '#8AC041'} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
@@ -182,150 +182,196 @@ const EditProfileScreen: React.FC = () => {
         styles.container,
         {
           paddingTop: Platform.OS === 'ios' ? insets.top : 25,
-          backgroundColor: isDark ? colors.background : 'white',
+          backgroundColor: colors.background,
         },
       ]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.headerBackground }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={isDark ? '#fff' : 'black'} />
+          <Ionicons name="arrow-back" size={24} color={colors.icon} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: isDark ? '#fff' : 'black' }]}>Edit Profile</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
+        
+        <View style={styles.headerActions}>
+          {isEditing ? (
+            <>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.cancelButton]} 
+                onPress={handleCancel}
+                disabled={isSaving}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.actionButton, styles.saveButton, { backgroundColor: colors.accent }]} 
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Ionicons name="checkmark" size={20} color="white" />
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.editButton]} 
+              onPress={handleEdit}
+            >
+              <Ionicons name="pencil" size={20} color={colors.accent} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      {error && (
+        <View style={[styles.errorContainer, { backgroundColor: colors.listItemBackground }]}>
+          <Text style={[styles.errorText, { color: '#EF4444' }]}>{error}</Text>
+        </View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View>
-            <View style={styles.imageContainer}>
-              <TouchableOpacity onPress={pickImage}>
-                {profileData.profileImage ? (
-                  <Image
-                    source={{ uri: profileData.profileImage }}
-                    style={styles.profileImage}
-                  />
-                ) : (
-                  <View style={styles.profileImagePlaceholder} />
-                )}
-                <View style={styles.cameraButton}>
+        <View>
+          <View style={styles.imageContainer}>
+            <TouchableOpacity onPress={pickImage} disabled={!isEditing}>
+              {profileData.profileImage ? (
+                <Image
+                  source={{ uri: profileData.profileImage }}
+                  style={[styles.profileImage, { borderColor: colors.accent }]}
+                />
+              ) : (
+                <View style={[styles.profileImagePlaceholder, { 
+                  backgroundColor: colors.listItemBackground,
+                  borderColor: colors.accent 
+                }]}>
+                  <Ionicons name="person" size={40} color={colors.secondaryText} />
+                </View>
+              )}
+              {isEditing && (
+                <View style={[styles.cameraButton, { backgroundColor: colors.accent }]}>
                   <Ionicons name="camera" size={20} color="white" />
                 </View>
-              </TouchableOpacity>
-            </View>
+              )}
+            </TouchableOpacity>
+          </View>
 
-            <View style={styles.formContainer}>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>First Name</Text>
+          <View style={styles.formContainer}>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>First Name</Text>
+              {isEditing ? (
                 <TextInput
                   style={[
                     styles.input,
                     {
-                      borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
-                      color: isDark ? '#fff' : '#374151',
+                      borderColor: colors.divider,
+                      backgroundColor: colors.background,
+                      color: colors.text,
                     },
                   ]}
                   value={profileData.first_name}
                   onChangeText={(text) => setProfileData({ ...profileData, first_name: text })}
                   placeholder="Enter your first name"
-                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
+                  placeholderTextColor={colors.secondaryText}
                 />
-              </View>
+              ) : (
+                <View style={[styles.displayField, { backgroundColor: colors.listItemBackground }]}>
+                  <Text style={[styles.displayText, { color: colors.text }]}>
+                    {profileData.first_name || 'Not set'}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Last Name</Text>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Last Name</Text>
+              {isEditing ? (
                 <TextInput
                   style={[
                     styles.input,
                     {
-                      borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
-                      color: isDark ? '#fff' : '#374151',
+                      borderColor: colors.divider,
+                      backgroundColor: colors.background,
+                      color: colors.text,
                     },
                   ]}
                   value={profileData.last_name}
                   onChangeText={(text) => setProfileData({ ...profileData, last_name: text })}
                   placeholder="Enter your last name"
-                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
+                  placeholderTextColor={colors.secondaryText}
                 />
-              </View>
+              ) : (
+                <View style={[styles.displayField, { backgroundColor: colors.listItemBackground }]}>
+                  <Text style={[styles.displayText, { color: colors.text }]}>
+                    {profileData.last_name || 'Not set'}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Email</Text>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Email</Text>
+              {isEditing ? (
                 <TextInput
                   style={[
                     styles.input,
                     {
-                      borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
-                      color: isDark ? '#fff' : '#374151',
+                      borderColor: colors.divider,
+                      backgroundColor: colors.background,
+                      color: colors.text,
                     },
                   ]}
                   value={profileData.email}
                   onChangeText={(text) => setProfileData({ ...profileData, email: text })}
                   placeholder="Enter your email"
-                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
+                  placeholderTextColor={colors.secondaryText}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
-              </View>
+              ) : (
+                <View style={[styles.displayField, { backgroundColor: colors.listItemBackground }]}>
+                  <Text style={[styles.displayText, { color: colors.text }]}>
+                    {profileData.email || 'Not set'}
+                  </Text>
+                </View>
+              )}
+            </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={[styles.label, { color: isDark ? '#fff' : '#374151' }]}>Phone Number</Text>
+            <View style={styles.inputGroup}>
+              <Text style={[styles.label, { color: colors.text }]}>Phone Number</Text>
+              {isEditing ? (
                 <TextInput
-                  style={[styles.input, { 
-                    borderColor: isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB',
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'white',
-                    color: isDark ? '#fff' : '#374151'
-                  }]}
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: colors.divider,
+                      backgroundColor: colors.background,
+                      color: colors.text,
+                    },
+                  ]}
                   value={profileData.phone}
                   onChangeText={(text) => setProfileData({ ...profileData, phone: text })}
                   placeholder="Enter your phone number"
-                  placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#9CA3AF'}
+                  placeholderTextColor={colors.secondaryText}
                   keyboardType="phone-pad"
                 />
-              </View>
-
-              <TouchableOpacity 
-                style={styles.saveButton}
-                onPress={handleSave}
-              >
-                <Text style={styles.saveButtonText}>Save changes</Text>
-              </TouchableOpacity>
+              ) : (
+                <View style={[styles.displayField, { backgroundColor: colors.listItemBackground }]}>
+                  <Text style={[styles.displayText, { color: colors.text }]}>
+                    {profileData.phone || 'Not set'}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </ScrollView>
-
-      <Modal
-        visible={showCalendar}
-        transparent={true}
-        animationType="fade"
-      >
-        <TouchableWithoutFeedback onPress={() => setShowCalendar(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.calendarContainer, { backgroundColor: isDark ? colors.cardBackground : 'white' }]}>
-                <Calendar
-                  onDayPress={handleDateSelect}
-                  maxDate={new Date().toISOString().split('T')[0]}
-                  markedDates={{}}
-                  theme={{
-                    selectedDayBackgroundColor: isDark ? '#fff' : '#8AC041',
-                    todayTextColor: isDark ? '#fff' : '#8AC041',
-                    arrowColor: isDark ? '#fff' : '#8AC041',
-                  }}
-                />
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -337,6 +383,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -346,7 +393,42 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
+    flex: 1,
     marginLeft: 12,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 20,
+    minWidth: 36,
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editButton: {
+    backgroundColor: 'transparent',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+  },
+  errorContainer: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+  },
+  errorText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   scrollView: {
     flex: 1,
@@ -359,27 +441,26 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    borderWidth: 2,
-    borderColor: '#8AC041',
+    borderWidth: 3,
   },
   profileImagePlaceholder: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#E5E7EB',
-    borderWidth: 2,
-    borderColor: '#8AC041',
+    borderWidth: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cameraButton: {
     position: 'absolute',
     bottom: 0,
     right: -5,
-    backgroundColor: '#8AC041',
     padding: 8,
     borderRadius: 15,
   },
   formContainer: {
     paddingHorizontal: 16,
+    paddingBottom: 32,
   },
   inputGroup: {
     marginBottom: 20,
@@ -388,53 +469,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     marginBottom: 8,
-    color: '#374151',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
   },
-  dateButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+  displayField: {
     borderRadius: 8,
     padding: 12,
-  },
-  dateText: {
-    fontSize: 16,
-    color: '#374151',
-  },
-  saveButton: {
-    backgroundColor: '#8AC041',
-    paddingVertical: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 28,
-    marginBottom: 32,
-  },
-  saveButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    minHeight: 48,
     justifyContent: 'center',
-    alignItems: 'center',
   },
-  calendarContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    width: '90%',
+  displayText: {
+    fontSize: 16,
   },
 });
 
-export default EditProfileScreen;
+export default ProfileScreen; 
