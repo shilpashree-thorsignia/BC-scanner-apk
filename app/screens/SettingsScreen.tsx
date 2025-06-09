@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from '@expo/vector-icons';
@@ -6,6 +6,7 @@ import { useRouter, Stack } from 'expo-router';
 import { getAllBusinessCards } from '../lib/api';
 import { exportBusinessCards } from '../utils/exportCards';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 interface ListItemProps {
   title: string;
@@ -63,8 +64,16 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => {
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [isExporting, setIsExporting] = useState(false);
   const { colors, toggleTheme, isDark } = useTheme();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      router.replace('/screens/WelcomeScreen');
+    }
+  }, [user]);
 
   const handleBack = () => {
     router.back();

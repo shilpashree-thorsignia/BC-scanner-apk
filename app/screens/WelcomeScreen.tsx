@@ -167,10 +167,16 @@ const WelcomeScreen: React.FC = () => {
         </Svg>
 
         <View style={[styles.logoContainer, { width: containerWidth, height: containerHeight }]}>
-          <View style={[styles.logoWrapper, { width: logoSize, height: logoSize, borderRadius: logoSize / 2 }]}>
+          <View style={[styles.logoWrapper, { width: logoSize, height: logoSize, borderRadius: logoSize / 2, borderWidth: 2, borderColor: 'transparent', backgroundColor: 'transparent' }]} >
             <Image
               source={require('../../assets/images/Logo2.png')}
-              style={{ width: logoSize * 0.8, height: logoSize * 0.8 }}
+              style={{ 
+                width: logoSize * 1.6, 
+                height: logoSize * 1.6,
+                borderWidth: 0,
+                borderColor: 'transparent',
+                backgroundColor: 'transparent'
+              }}
               resizeMode="contain"
             />
           </View>
@@ -200,6 +206,14 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    margin: 0,
+    padding: 0,
     justifyContent: 'center',
     alignItems: 'center',
   },

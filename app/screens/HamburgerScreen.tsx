@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const MENU_WIDTH = Dimensions.get('window').width * 0.85;
 
@@ -37,6 +38,7 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
   const slideAnim = useRef(new Animated.Value(-MENU_WIDTH)).current;
   const router = useRouter();
   const { isDark, colors } = useTheme();
+  const { signOut } = useAuth();
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -178,12 +180,13 @@ const HamburgerScreen = ({ logoPath, isVisible, onClose }: HamburgerScreenProps)
               icon="log-out-outline"
               title="Log out"
               isLogout
-              onPress={() => {
-                // Reset navigation stack and navigate to login
-                router.replace({
-                  pathname: '/screens/LoginScreen',
-                  params: { from: 'logout' }
-                });
+              onPress={async () => {
+                try {
+                  await signOut();
+                  // Navigation will be handled by the auth context and _layout.tsx
+                } catch (error) {
+                  console.error('Logout error:', error);
+                }
               }}
             />
           </View>

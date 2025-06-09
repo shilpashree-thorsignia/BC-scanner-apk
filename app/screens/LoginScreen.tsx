@@ -50,7 +50,7 @@ const LoginScreen: React.FC = () => {
   const buttonWidth = isDesktop ? '90%' : '100%';
   const fontSize = isDesktop ? { title: 28, normal: 16, small: 14 } : { title: 24, normal: 16, small: 14 };
 
-  const { setUser } = useAuth();
+  const { setUser, signIn } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -60,31 +60,7 @@ const LoginScreen: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/login/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password
-        }),
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-      
-      // Store user data in context
-      setUser({
-        id: data.id.toString(),
-        firstName: data.first_name,
-        lastName: data.last_name,
-        email: data.email,
-        phone: data.phone
-      });
+      await signIn(email, password);
       
       // Login successful, navigate to home
       router.replace('/screens/NavbarScreen');

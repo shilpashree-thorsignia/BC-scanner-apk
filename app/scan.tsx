@@ -4,14 +4,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { scanBusinessCard, getAllBusinessCards, createBusinessCard, BusinessCard, CreateCardData } from './lib/api';
 import AddCardModal from './components/AddCardModal';
 import BusinessCardList from './components/BusinessCardList';
+import { useAuth } from './context/AuthContext';
+import { useRouter } from 'expo-router';
 
 export default function ScanScreen() {
+  const { user } = useAuth();
+  const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cards, setCards] = useState<BusinessCard[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentFilter, setCurrentFilter] = useState<'today' | 'lastWeek' | 'thisMonth'>('today');
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      router.replace('/screens/WelcomeScreen');
+    }
+  }, [user]);
 
   const loadCards = async () => {
     try {
@@ -110,7 +121,15 @@ export default function ScanScreen() {
           cards={cards}
           onRefresh={loadCards}
           refreshing={loading}
-          onFilterChange={handleFilterChange}
+          onCardDelete={(id) => {
+            if (id === -1) {
+              // Special case: refresh all cards (used for restore)
+              loadCards();
+            } else {
+              // Normal delete: remove card from local state
+              setCards(prevCards => prevCards.filter(card => card.id !== id));
+            }
+          }}
         />
       )}
 

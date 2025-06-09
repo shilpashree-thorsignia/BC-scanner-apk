@@ -8,6 +8,7 @@ import {
   Image,
   SafeAreaView,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -24,7 +25,23 @@ const NavbarScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [cards, setCards] = useState<BusinessCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentFilter, setCurrentFilter] = useState<'today' | 'lastWeek' | 'thisMonth'>('today');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'today' | 'lastWeek' | 'thisMonth'>('all');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  const filterOptions = [
+    { value: 'all', label: 'All Cards' },
+    { value: 'today', label: 'Today' },
+    { value: 'lastWeek', label: 'Last Week' },
+    { value: 'thisMonth', label: 'This Month' },
+  ];
+
+  const sortOptions = [
+    { value: 'asc', label: 'A to Z' },
+    { value: 'desc', label: 'Z to A' },
+  ];
 
   const loadCards = async () => {
     try {
@@ -42,8 +59,14 @@ const NavbarScreen: React.FC = () => {
     loadCards();
   }, []);
 
-  const handleFilterChange = (filter: 'today' | 'lastWeek' | 'thisMonth') => {
-    setCurrentFilter(filter);
+  const handleFilterChange = (filter: 'all' | 'today' | 'lastWeek' | 'thisMonth') => {
+    setSelectedFilter(filter);
+    setShowFilterDropdown(false);
+  };
+
+  const handleSortChange = (order: 'asc' | 'desc') => {
+    setSortOrder(order);
+    setShowSortDropdown(false);
   };
 
   const TopBar = () => (
@@ -55,21 +78,102 @@ const NavbarScreen: React.FC = () => {
         >
           <Ionicons name="menu-outline" size={24} color={isDark ? '#fff' : '#666'} />
         </TouchableOpacity>
-        <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6' }]}>
-          <Ionicons name="search-outline" size={20} color={isDark ? '#fff' : '#666'} style={styles.searchIcon} />
-          <TextInput
-            style={[styles.searchInput, { color: isDark ? '#fff' : '#1f2937' }]}
-            placeholder="Search Cards"
-            placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#999'}
-          />
-        </View>
+
+        
+        {/* Filter Button */}
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => {
+            setShowFilterDropdown(!showFilterDropdown);
+            setShowSortDropdown(false);
+          }}
+        >
+          <Ionicons name="filter-outline" size={20} color={isDark ? '#fff' : '#666'} />
+          <Text style={[styles.filterText, { color: isDark ? '#fff' : '#666' }]}>Filters</Text>
+        </TouchableOpacity>
+
+        {/* Sort Button */}
+        <TouchableOpacity
+          style={styles.sortButton}
+          onPress={() => {
+            setShowSortDropdown(!showSortDropdown);
+            setShowFilterDropdown(false);
+          }}
+        >
+          <Ionicons name="swap-vertical-outline" size={20} color={isDark ? '#fff' : '#666'} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.trashButton}
           onPress={() => router.push('/screens/TrashScreen' as any)}
         >
           <Ionicons name="trash-outline" size={24} color={isDark ? '#fff' : '#666'} />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.selectButton}
+          onPress={() => setIsSelectionMode(!isSelectionMode)}
+        >
+          <Ionicons 
+            name={isSelectionMode ? "close" : "checkmark-circle-outline"} 
+            size={24} 
+            color={isSelectionMode ? '#FF4444' : (isDark ? '#fff' : '#666')} 
+          />
+        </TouchableOpacity>
       </View>
+
+      {/* Filter Dropdown */}
+      {showFilterDropdown && (
+        <View style={[styles.dropdown, styles.filterDropdown, { backgroundColor: isDark ? colors.background : '#fff', right: 100 }]}>
+          {filterOptions.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.dropdownItem,
+                selectedFilter === option.value && styles.selectedDropdownItem
+              ]}
+              onPress={() => handleFilterChange(option.value as 'all' | 'today' | 'lastWeek' | 'thisMonth')}
+            >
+              <Text style={[
+                styles.dropdownItemText, 
+                { color: isDark ? '#fff' : '#333' },
+                selectedFilter === option.value && styles.selectedDropdownItemText
+              ]}>
+                {option.label}
+              </Text>
+              {selectedFilter === option.value && (
+                <Ionicons name="checkmark" size={16} color="#8ac041" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Sort Dropdown */}
+      {showSortDropdown && (
+        <View style={[styles.dropdown, styles.sortDropdown, { backgroundColor: isDark ? colors.background : '#fff', right: 60 }]}>
+          {sortOptions.map((option) => (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.dropdownItem,
+                sortOrder === option.value && styles.selectedDropdownItem
+              ]}
+              onPress={() => handleSortChange(option.value as 'asc' | 'desc')}
+            >
+              <Text style={[
+                styles.dropdownItemText, 
+                { color: isDark ? '#fff' : '#333' },
+                sortOrder === option.value && styles.selectedDropdownItemText
+              ]}>
+                {option.label}
+              </Text>
+              {sortOrder === option.value && (
+                <Ionicons name="checkmark" size={16} color="#8ac041" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
     </View>
   );
 
@@ -172,20 +276,33 @@ const NavbarScreen: React.FC = () => {
             <Text style={[styles.emptyText, { color: isDark ? colors.text || '#fff' : '#1f2937' }]}>No Card Found</Text>
           </View>
         ) : (
-          <BusinessCardList
-            cards={cards}
-            onRefresh={loadCards}
-            refreshing={loading}
-            onCardDelete={(id) => {
-              if (id === -1) {
-                // Special case: refresh all cards (used for restore)
-                loadCards();
-              } else {
-                // Normal delete: remove card from local state
-                setCards(prevCards => prevCards.filter(card => card.id !== id));
-              }
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => {
+              setShowFilterDropdown(false);
+              setShowSortDropdown(false);
             }}
-          />
+          >
+            <BusinessCardList
+              cards={cards}
+              onRefresh={loadCards}
+              refreshing={loading}
+              externalSelectionMode={isSelectionMode}
+              onSelectionModeChange={setIsSelectionMode}
+              externalFilter={selectedFilter}
+              sortOrder={sortOrder}
+              onCardDelete={(id) => {
+                if (id === -1) {
+                  // Special case: refresh all cards (used for restore)
+                  loadCards();
+                } else {
+                  // Normal delete: remove card from local state
+                  setCards(prevCards => prevCards.filter(card => card.id !== id));
+                }
+              }}
+            />
+          </TouchableOpacity>
         )}
         
         {/* Floating Camera Button */}
@@ -230,23 +347,12 @@ const styles = StyleSheet.create({
   hamburgerButton: {
     padding: 8,
   },
-  searchContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-  },
-  searchIcon: {
-    marginRight: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: 40,
-    color: '#1f2937',
-  },
+
   trashButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  selectButton: {
     padding: 8,
     marginLeft: 8,
   },
@@ -331,6 +437,66 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    marginLeft: 8,
+    gap: 4,
+  },
+  filterText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  sortButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  dropdown: {
+    position: 'absolute',
+    top: 70,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  filterDropdown: {
+    maxHeight: 200,
+  },
+  sortDropdown: {
+    maxHeight: 150,
+  },
+  selectedDropdownItem: {
+    backgroundColor: 'rgba(138, 192, 65, 0.1)',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 6,
+    marginVertical: 2,
+    minWidth: 120,
+  },
+  dropdownItemText: {
+    color: '#333',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  selectedDropdownItemText: {
+    color: '#8ac041',
+    fontWeight: '600',
   },
 });
 

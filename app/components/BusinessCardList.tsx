@@ -15,86 +15,126 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { BusinessCard as BusinessCardType } from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import MultiCardShareView from './MultiCardShareView';
 
 interface BusinessCardProps {
   item: BusinessCardType;
   onDelete?: (id: number) => void;
   onShowSnackbar?: (message: string, action?: () => void, actionText?: string) => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (id: number) => void;
 }
 
-const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item, onDelete, onShowSnackbar }) => {
+interface BusinessCardRef {
+  captureCard: () => Promise<string>;
+}
+
+const BusinessCardComponent = React.forwardRef<BusinessCardRef, BusinessCardProps>(({ 
+  item, 
+  onDelete, 
+  onShowSnackbar, 
+  isSelectionMode = false, 
+  isSelected = false, 
+  onSelect 
+}, ref) => {
   const { colors, isDark } = useTheme();
   const router = useRouter();
+  const cardRef = useRef<View>(null);
+
+  // Expose the capture function to parent
+  React.useImperativeHandle(ref, () => ({
+    captureCard: async () => {
+      if (!cardRef.current) {
+        throw new Error('Card ref not available');
+      }
+      return await captureRef(cardRef.current, {
+        format: 'png',
+        quality: 1.0,
+        result: 'tmpfile',
+      });
+    }
+  }), []);
   
   const handleCardPress = () => {
-    Alert.alert(
-      'Card Options',
-      'What would you like to do with this business card?',
-      [
-        {
-          text: 'Edit',
-          onPress: () => {
-            // Navigate to edit screen with card data
-            router.push({
-              pathname: '/screens/EditBusinessCard',
-              params: { card: JSON.stringify(item) }
-            });
+    if (isSelectionMode) {
+      // In selection mode, toggle selection
+      if (onSelect) {
+        onSelect(item.id);
+      }
+    } else {
+      // Normal mode, show options
+      Alert.alert(
+        'Card Options',
+        'What would you like to do with this business card?',
+        [
+          {
+            text: 'Edit',
+            onPress: () => {
+              // Navigate to edit screen with card data
+              router.push({
+                pathname: '/screens/EditBusinessCard',
+                params: { card: JSON.stringify(item) }
+              });
+            },
           },
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Delete Card',
-              'Are you sure you want to delete this business card?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      const { deleteBusinessCard, restoreBusinessCard } = await import('../lib/api');
-                      const result = await deleteBusinessCard(item.id);
-                      
-                      // Call the onDelete callback to refresh the list
-                      if (onDelete) {
-                        onDelete(item.id);
-                      }
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                'Delete Card',
+                'Are you sure you want to delete this business card?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const { deleteBusinessCard, restoreBusinessCard } = await import('../lib/api');
+                        const result = await deleteBusinessCard(item.id);
+                        
+                        // Call the onDelete callback to refresh the list
+                        if (onDelete) {
+                          onDelete(item.id);
+                        }
 
-                      // Show snackbar with restore option
-                      if (onShowSnackbar) {
-                        onShowSnackbar(
-                          'Business card moved to trash',
-                          async () => {
-                            try {
-                              await restoreBusinessCard(item.id);
-                              // Refresh the list after restore
-                              if (onDelete) {
-                                onDelete(-1); // Use -1 as a signal to refresh the entire list
+                        // Show snackbar with restore option
+                        if (onShowSnackbar) {
+                          onShowSnackbar(
+                            'Business card moved to trash',
+                            async () => {
+                              try {
+                                await restoreBusinessCard(item.id);
+                                // Refresh the list after restore
+                                if (onDelete) {
+                                  onDelete(-1); // Use -1 as a signal to refresh the entire list
+                                }
+                              } catch (error) {
+                                console.error('Error restoring card:', error);
+                                Alert.alert('Error', 'Failed to restore business card. Please try again.');
                               }
-                            } catch (error) {
-                              console.error('Error restoring card:', error);
-                              Alert.alert('Error', 'Failed to restore business card. Please try again.');
-                            }
-                          },
-                          'UNDO'
-                        );
+                            },
+                            'UNDO'
+                          );
+                        }
+                      } catch (error) {
+                        console.error('Error deleting card:', error);
+                        Alert.alert('Error', 'Failed to delete business card. Please try again.');
                       }
-                    } catch (error) {
-                      console.error('Error deleting card:', error);
-                      Alert.alert('Error', 'Failed to delete business card. Please try again.');
-                    }
+                    },
                   },
-                },
-              ]
-            );
+                ]
+              );
+            },
           },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
   };
 
   const handleWhatsApp = () => {
@@ -111,19 +151,36 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item, onDelete, on
 
   const handleShare = async () => {
     try {
-      const name = item.name || 'Contact';
-      const jobTitle = item.job_title || '';
-      const email = item.email || '';
-      const mobile = item.mobile || '';
-      
-      await Share.share({
-        message: `${name} ${jobTitle ? '- ' + jobTitle : ''}
-        ${email}
-        ${mobile}`,
-        title: `Contact details for ${name}`,
+      if (!cardRef.current) {
+        Alert.alert('Error', 'Unable to capture business card image');
+        return;
+      }
+
+      // Capture the business card as an image
+      const uri = await captureRef(cardRef.current, {
+        format: 'png',
+        quality: 1.0,
+        result: 'tmpfile',
       });
+
+      // Check if sharing is available
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+      
+      if (isSharingAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: `Share ${item.name || 'Business Card'}`,
+        });
+      } else {
+        // Fallback to native Share API with the image URI
+        await Share.share({
+          url: uri,
+          title: `Business Card - ${item.name || 'Contact'}`,
+        });
+      }
     } catch (error) {
-      console.error('Error sharing:', error);
+      console.error('Error sharing business card image:', error);
+      Alert.alert('Error', 'Failed to share business card. Please try again.');
     }
   };
 
@@ -165,11 +222,29 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item, onDelete, on
   return (
     <View style={styles.cardContainer}>
       <TouchableOpacity 
-        style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}
+        ref={cardRef}
+        style={[
+          styles.card, 
+          { 
+            backgroundColor: colors.cardBackground, 
+            borderColor: isSelected ? '#22C55E' : colors.accent,
+            borderWidth: isSelected ? 3 : 2,
+            opacity: isSelectionMode && !isSelected ? 0.6 : 1
+          }
+        ]}
         onPress={handleCardPress}
         activeOpacity={0.7}
       >
         <View style={styles.cardContent}>
+          {isSelectionMode && (
+            <View style={styles.selectionIndicator}>
+              <Ionicons 
+                name={isSelected ? "checkmark-circle" : "ellipse-outline"} 
+                size={24} 
+                color={isSelected ? "#22C55E" : "#9CA3AF"} 
+              />
+            </View>
+          )}
           <View style={styles.topSection}>
             <View style={styles.nameAndTitleSection}>
               <View style={styles.nameContainer}>
@@ -231,7 +306,7 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item, onDelete, on
       </TouchableOpacity>
     </View>
   );
-};
+});
 
 type FilterOption = 'all' | 'today' | 'week' | 'month';
 
@@ -241,6 +316,10 @@ interface BusinessCardListProps {
   refreshing?: boolean;
   filter?: FilterOption;
   onCardDelete?: (id: number) => void;
+  externalSelectionMode?: boolean;
+  onSelectionModeChange?: (isSelectionMode: boolean) => void;
+  externalFilter?: 'today' | 'lastWeek' | 'thisMonth' | 'all';
+  sortOrder?: 'asc' | 'desc';
 }
 
 interface FilterOptionProps {
@@ -338,13 +417,29 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
   onRefresh,
   refreshing = false,
   onCardDelete,
+  externalSelectionMode = false,
+  onSelectionModeChange,
+  externalFilter = 'all',
+  sortOrder = 'asc',
 }) => {
   const { colors } = useTheme();
-  const [currentFilter, setCurrentFilter] = useState<FilterOption>('all');
+
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarAction, setSnackbarAction] = useState<(() => void) | undefined>();
   const [snackbarActionText, setSnackbarActionText] = useState<string | undefined>();
+  const [isSelectionMode, setIsSelectionMode] = useState(externalSelectionMode);
+  const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
+  const cardRefs = useRef<Map<number, BusinessCardRef>>(new Map());
+  const multiCardShareRef = useRef<View>(null);
+
+  // Sync with external selection mode
+  useEffect(() => {
+    setIsSelectionMode(externalSelectionMode);
+    if (!externalSelectionMode) {
+      setSelectedCards(new Set());
+    }
+  }, [externalSelectionMode]);
 
   const showSnackbar = (message: string, action?: () => void, actionText?: string) => {
     setSnackbarMessage(message);
@@ -359,81 +454,201 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
     setSnackbarAction(undefined);
     setSnackbarActionText(undefined);
   };
-  
-  const handleFilterChange = (filter: FilterOption) => {
-    setCurrentFilter(filter);
+
+  const toggleSelectionMode = () => {
+    const newSelectionMode = !isSelectionMode;
+    setIsSelectionMode(newSelectionMode);
+    setSelectedCards(new Set());
+    if (onSelectionModeChange) {
+      onSelectionModeChange(newSelectionMode);
+    }
   };
 
-  const getFilteredCards = () => {
-    if (currentFilter === 'all') {
-      return cards;
+  const handleCardSelect = (cardId: number) => {
+    const newSelectedCards = new Set(selectedCards);
+    if (newSelectedCards.has(cardId)) {
+      newSelectedCards.delete(cardId);
+    } else {
+      newSelectedCards.add(cardId);
     }
-    
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
-    return cards.filter(card => {
-      const cardDate = new Date(card.created_at);
-      
-      switch (currentFilter) {
-        case 'today':
-          return cardDate >= today;
-        
-        case 'week':
-          const weekAgo = new Date(now);
-          weekAgo.setDate(now.getDate() - 7);
-          return cardDate >= weekAgo;
-        
-        case 'month':
-          const monthAgo = new Date(now);
-          monthAgo.setDate(now.getDate() - 30);
-          return cardDate >= monthAgo;
-        
-        default:
-          return true;
+    setSelectedCards(newSelectedCards);
+  };
+
+  const selectAllCards = () => {
+    const filteredCardIds = new Set(filteredCards.map(card => card.id));
+    setSelectedCards(filteredCardIds);
+  };
+
+  const deselectAllCards = () => {
+    setSelectedCards(new Set());
+  };
+
+  const shareSelectedCards = async () => {
+    if (selectedCards.size === 0) {
+      Alert.alert('No Cards Selected', 'Please select at least one card to share.');
+      return;
+    }
+
+    try {
+      const cardsToShare = filteredCards.filter(card => selectedCards.has(card.id));
+
+      if (selectedCards.size === 1) {
+        // Single card - use existing individual card sharing
+        const cardRef = cardRefs.current.get(cardsToShare[0].id);
+        if (cardRef) {
+          const imageUri = await cardRef.captureCard();
+          
+          const isSharingAvailable = await Sharing.isAvailableAsync();
+          if (isSharingAvailable) {
+            await Sharing.shareAsync(imageUri, {
+              mimeType: 'image/png',
+              dialogTitle: `Share ${cardsToShare[0].name || 'Business Card'}`,
+            });
+          } else {
+            await Share.share({
+              url: imageUri,
+              title: `Business Card - ${cardsToShare[0].name || 'Contact'}`,
+            });
+          }
+        }
+      } else {
+        // Multiple cards - create combined image
+        if (!multiCardShareRef.current) {
+          Alert.alert('Error', 'Unable to create combined image. Please try again.');
+          return;
+        }
+
+        // Capture the combined view
+        const combinedImageUri = await captureRef(multiCardShareRef.current, {
+          format: 'png',
+          quality: 1.0,
+          result: 'tmpfile',
+        });
+
+        // Share the combined image
+        const isSharingAvailable = await Sharing.isAvailableAsync();
+        if (isSharingAvailable) {
+          await Sharing.shareAsync(combinedImageUri, {
+            mimeType: 'image/png',
+            dialogTitle: `Share ${cardsToShare.length} Business Cards`,
+          });
+        } else {
+          await Share.share({
+            url: combinedImageUri,
+            title: `${cardsToShare.length} Business Cards`,
+          });
+        }
       }
-    });
+
+      // Exit selection mode after sharing
+      const newSelectionMode = false;
+      setIsSelectionMode(newSelectionMode);
+      setSelectedCards(new Set());
+      if (onSelectionModeChange) {
+        onSelectionModeChange(newSelectionMode);
+      }
+    } catch (error) {
+      console.error('Error sharing selected cards:', error);
+      Alert.alert('Error', 'Failed to share selected cards. Please try again.');
+    }
   };
   
-  const filteredCards = getFilteredCards();
+  const getFilteredAndSortedCards = () => {
+    let filteredCards = cards;
+    
+    // Apply filter
+    if (externalFilter !== 'all') {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      filteredCards = cards.filter(card => {
+        const cardDate = new Date(card.created_at);
+        
+        switch (externalFilter) {
+          case 'today':
+            return cardDate >= today;
+          
+          case 'lastWeek':
+            const weekAgo = new Date(now);
+            weekAgo.setDate(now.getDate() - 7);
+            return cardDate >= weekAgo;
+          
+          case 'thisMonth':
+            const monthAgo = new Date(now);
+            monthAgo.setDate(now.getDate() - 30);
+            return cardDate >= monthAgo;
+          
+          default:
+            return true;
+        }
+      });
+    }
+    
+    // Apply sorting
+    const sortedCards = [...filteredCards].sort((a, b) => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      
+      if (sortOrder === 'asc') {
+        return nameA.localeCompare(nameB);
+      } else {
+        return nameB.localeCompare(nameA);
+      }
+    });
+    
+    return sortedCards;
+  };
+  
+  const filteredCards = getFilteredAndSortedCards();
   
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.filterContainer, { backgroundColor: colors.cardBackground }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScrollContent}>
-        <FilterOptionButton 
-          label="All Cards" 
-          value="all" 
-          isActive={currentFilter === 'all'} 
-          onPress={handleFilterChange} 
-        />
-        <FilterOptionButton 
-          label="Today" 
-          value="today" 
-          isActive={currentFilter === 'today'} 
-          onPress={handleFilterChange} 
-        />
-        <FilterOptionButton 
-          label="This Week" 
-          value="week" 
-          isActive={currentFilter === 'week'} 
-          onPress={handleFilterChange} 
-        />
-        <FilterOptionButton 
-          label="This Month" 
-          value="month" 
-          isActive={currentFilter === 'month'} 
-          onPress={handleFilterChange} 
-        />
-        </ScrollView>
-      </View>
+      {isSelectionMode ? (
+        <View style={[styles.selectionHeader, { backgroundColor: colors.cardBackground }]}>
+          <View style={styles.selectionHeaderLeft}>
+            <TouchableOpacity onPress={toggleSelectionMode} style={styles.selectionButton}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={[styles.selectionCount, { color: colors.text }]}>
+              {selectedCards.size} selected
+            </Text>
+          </View>
+          <View style={styles.selectionHeaderRight}>
+            {selectedCards.size > 0 && (
+              <TouchableOpacity onPress={shareSelectedCards} style={styles.selectionButton}>
+                <Ionicons name="share-outline" size={24} color="#22C55E" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity 
+              onPress={selectedCards.size === filteredCards.length ? deselectAllCards : selectAllCards} 
+              style={styles.selectionButton}
+            >
+              <Ionicons 
+                name={selectedCards.size === filteredCards.length ? "checkmark-circle" : "ellipse-outline"} 
+                size={24} 
+                color={colors.text} 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
       <FlatList
         data={filteredCards}
         renderItem={({ item }) => (
           <BusinessCardComponent 
+            ref={(ref) => {
+              if (ref) {
+                cardRefs.current.set(item.id, ref);
+              } else {
+                cardRefs.current.delete(item.id);
+              }
+            }}
             item={item} 
             onDelete={onCardDelete} 
             onShowSnackbar={showSnackbar}
+            isSelectionMode={isSelectionMode}
+            isSelected={selectedCards.has(item.id)}
+            onSelect={handleCardSelect}
           />
         )}
         keyExtractor={(item) => item.id.toString()}
@@ -449,6 +664,14 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
         action={snackbarAction}
         actionText={snackbarActionText}
       />
+      
+      {/* Hidden MultiCardShareView for capturing combined images */}
+      <View style={styles.hiddenView}>
+        <MultiCardShareView
+          ref={multiCardShareRef}
+          cards={filteredCards.filter(card => selectedCards.has(card.id))}
+        />
+      </View>
     </View>
   );
 };
@@ -528,6 +751,38 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 10,
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  selectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectionHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectionButton: {
+    padding: 8,
+    marginHorizontal: 4,
+  },
+  selectionCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 12,
   },
   topSection: {
     marginBottom: 8,
@@ -687,6 +942,13 @@ const styles = StyleSheet.create({
   snackbarClose: {
     marginLeft: 8,
     padding: 4,
+  },
+  hiddenView: {
+    position: 'absolute',
+    top: -10000, // Move far off screen
+    left: -10000,
+    opacity: 0,
+    zIndex: -1,
   },
 });
 

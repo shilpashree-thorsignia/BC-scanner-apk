@@ -9,14 +9,18 @@ A comprehensive React Native mobile application with Django REST API backend for
 - **QR Code Detection**: Automatic QR code scanning with fallback to business card OCR
 - **CRUD Operations**: Create, Read, Update, Delete business cards
 - **Google Photos-style Restore**: Soft delete with 30-day restore functionality
-- **Search & Filter**: Search cards by name, company, or any field
-- **Export & Share**: Share business card information
+- **Advanced Filtering**: Filter cards by time periods (All, Today, Last Week, This Month)
+- **Alphabetical Sorting**: Sort cards A-Z or Z-A by name
+- **Multi-Select Sharing**: Select and share multiple business cards as combined images
+- **Individual Card Sharing**: Share single business cards as high-quality images
 - **Image Management**: Store and display business card images
 
 ### Advanced Features
 - **Multi-configuration OCR**: Multiple preprocessing methods for optimal accuracy
 - **Smart Data Extraction**: Intelligent parsing of names, emails, phones, addresses
 - **Real-time Validation**: Form validation with error handling
+- **Selection Mode**: Multi-select interface with visual feedback and batch operations
+- **Combined Image Generation**: Automatic layout and capture of multiple cards in grid format
 - **Responsive UI**: Modern, clean interface with smooth animations
 - **Offline Support**: Local storage with AsyncStorage
 
@@ -49,7 +53,8 @@ BC-scanner-app/
 │   │   └── settings.tsx         # Settings screen
 │   ├── (modals)/                # Modal screens
 │   ├── components/              # Reusable UI components
-│   │   ├── BusinessCardList.tsx # Main business card display component
+│   │   ├── BusinessCardList.tsx # Main business card display component with multi-select
+│   │   ├── MultiCardShareView.tsx # Combined layout for sharing multiple cards
 │   │   └── ...
 │   ├── screens/                 # Screen components
 │   │   ├── ScannerScreen.tsx    # Camera/gallery scanning interface
@@ -442,6 +447,142 @@ Update database → Refresh list
 Delete card → Soft delete → Move to trash → 30-day retention → 
 Restore option → Permanent delete
 ```
+
+## 📤 Multi-Select Sharing Feature
+
+### Overview
+The app supports both individual and multi-select sharing of business cards as high-quality images, providing users with flexible sharing options.
+
+### How to Use Multi-Select Sharing
+
+#### 1. Enter Selection Mode
+- Tap the **checkmark icon** (✓) in the top navigation bar
+- The interface switches to selection mode with visual indicators
+
+#### 2. Select Business Cards
+- Tap on any business cards you want to share
+- Selected cards show **green checkmarks** and **green borders**
+- Unselected cards appear slightly dimmed
+- Selection counter shows "X selected" in the header
+
+#### 3. Selection Controls
+- **Select All/Deselect All**: Tap the circle icon in the header
+- **Share Selected**: Tap the green share icon (only visible when cards are selected)
+- **Exit Selection**: Tap the X button to exit selection mode
+
+#### 4. Sharing Options
+- **Single Card**: Shares the individual card image (same as regular share)
+- **Multiple Cards**: Creates a combined image with all selected cards in a grid layout
+
+### Technical Implementation
+
+#### Single Card Sharing
+```typescript
+// Captures individual card as PNG image
+const imageUri = await captureRef(cardRef.current, {
+  format: 'png',
+  quality: 1.0,
+  result: 'tmpfile',
+});
+```
+
+#### Multi-Card Sharing
+```typescript
+// Creates combined grid layout and captures as single image
+const combinedImageUri = await captureRef(multiCardShareRef.current, {
+  format: 'png',
+  quality: 1.0,
+  result: 'tmpfile',
+});
+```
+
+### Features
+- **Visual Selection**: Clear indication of selected cards with green borders and checkmarks
+- **Batch Operations**: Select multiple cards at once with select all/deselect all
+- **Combined Layout**: Automatic grid arrangement for multiple cards
+- **High Quality**: All images captured at 1.0 quality as PNG format
+- **Native Sharing**: Uses device's native share dialog for maximum compatibility
+- **Error Handling**: Graceful fallbacks if image capture fails
+
+### Grid Layout Logic
+- **1 Card**: Full-width single card
+- **2 Cards**: Side-by-side layout
+- **3+ Cards**: 2-column grid layout with automatic wrapping
+- **Responsive**: Adapts to screen width with proper spacing and margins
+
+## 🔍 Filtering & Sorting Features
+
+### Advanced Filtering System
+The app provides a comprehensive filtering system accessible through the top navigation bar.
+
+#### How to Use Filters
+
+#### 1. Access Filter Options
+- Tap the **"Filters"** button with filter icon in the top navigation bar
+- A dropdown menu appears with available filter options
+
+#### 2. Filter Options
+- **All Cards**: Shows all business cards (default)
+- **Today**: Shows cards created today
+- **Last Week**: Shows cards created in the last 7 days
+- **This Month**: Shows cards created in the last 30 days
+
+#### 3. Visual Feedback
+- Selected filter option shows a **green checkmark** (✓)
+- Currently active filter is highlighted
+- Dropdown automatically closes after selection
+
+### Alphabetical Sorting System
+Sort your business cards alphabetically for better organization.
+
+#### How to Use Sorting
+
+#### 1. Access Sort Options
+- Tap the **sort icon** (vertical arrows) in the top navigation bar
+- A dropdown menu appears with sorting options
+
+#### 2. Sort Options
+- **A to Z**: Sorts cards alphabetically by name (ascending)
+- **Z to A**: Sorts cards reverse alphabetically by name (descending)
+
+#### 3. Combined Functionality
+- **Filters and sorting work together**: Apply a filter (e.g., "Today") and sort (e.g., "A to Z")
+- **Real-time updates**: Changes apply immediately
+- **Persistent selection**: Your choices remain active until changed
+
+### Technical Implementation
+```typescript
+// Filter logic
+const getFilteredCards = () => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  return cards.filter(card => {
+    const cardDate = new Date(card.created_at);
+    switch (externalFilter) {
+      case 'today': return cardDate >= today;
+      case 'lastWeek': return cardDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      case 'thisMonth': return cardDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      default: return true;
+    }
+  });
+};
+
+// Sort logic
+const sortedCards = filteredCards.sort((a, b) => {
+  const nameA = (a.name || '').toLowerCase();
+  const nameB = (b.name || '').toLowerCase();
+  return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+});
+```
+
+### Features
+- **Dropdown Interface**: Clean, intuitive dropdown menus
+- **Visual Indicators**: Checkmarks show current selections
+- **Auto-close**: Dropdowns close automatically after selection
+- **Mutual Exclusivity**: Opening one dropdown closes the other
+- **Touch-friendly**: Large tap targets for mobile use
+- **Dark Mode Support**: Adapts to current theme settings
 
 ## 🔧 Configuration
 

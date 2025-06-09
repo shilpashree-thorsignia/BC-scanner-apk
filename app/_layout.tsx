@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Camera } from 'expo-camera';
-import { View, StyleSheet, Platform, Dimensions, StatusBar } from 'react-native';
+import { View, StyleSheet, Platform, Dimensions, StatusBar, Text } from 'react-native';
 import ThemeProvider, { useTheme } from './context/ThemeContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-// This component will use the theme
+// This component will use the theme and handle authentication
 function AppLayout() {
   // Store dimensions in state to force re-render on resize
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
@@ -14,6 +14,46 @@ function AppLayout() {
   const isDesktop = Platform.OS === 'web' && width > 768;
   const isWeb = Platform.OS === 'web';
   const { colors, isDark } = useTheme();
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    if (loading) return; // Don't do anything while loading
+
+    const inAuthScreens = segments[0] === 'screens' && (
+      segments[1] === 'Onboarding1' || 
+      segments[1] === 'Onboarding2' || 
+      segments[1] === 'Onboarding3' ||
+      segments[1] === 'WelcomeScreen' ||
+      segments[1] === 'LoginScreen' ||
+      segments[1] === 'SignupScreen' ||
+      segments[1] === 'ForgotPasswordScreen'
+    );
+
+    const inMainApp = segments[0] === 'screens' && (
+      segments[1] === 'NavbarScreen' ||
+      segments[1] === 'ScannerScreen' ||
+      segments[1] === 'AddManually' ||
+      segments[1] === 'ProfileScreen' ||
+      segments[1] === 'EditBusinessCard' ||
+      segments[1] === 'TrashScreen'
+    );
+
+    // If user is not authenticated and not in auth screens, redirect to welcome
+    if (!user && !inAuthScreens) {
+      console.log('User not authenticated, redirecting to welcome screen');
+      router.replace('/screens/WelcomeScreen');
+      return;
+    }
+
+    // If user is authenticated but in auth screens, redirect to main app
+    if (user && inAuthScreens) {
+      console.log('User authenticated, redirecting to main app');
+      router.replace('/screens/NavbarScreen');
+      return;
+    }
+  }, [user, segments, loading, router]);
 
   useEffect(() => {
     (async () => {
@@ -57,6 +97,23 @@ function AppLayout() {
     }
   }, []);
 
+  // Show loading screen while determining authentication state
+  if (loading) {
+    return (
+      <>
+        <StatusBar 
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          backgroundColor={colors.background}
+        />
+        <SafeAreaProvider>
+          <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.loadingText, { color: colors.text || '#000' }]}>Loading...</Text>
+          </View>
+        </SafeAreaProvider>
+      </>
+    );
+  }
+
   return (
     <>
       <StatusBar 
@@ -98,5 +155,13 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '500',
   },
 });

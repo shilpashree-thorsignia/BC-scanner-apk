@@ -397,39 +397,39 @@ export default function ScannerScreen() {
         setCapturedImage(selectedImage.uri);
 
         try {
-          // First try QR code scanning
-          const qrScanResult = await scanQRCode(selectedImage.uri);
-          console.log('QR code scan successful:', qrScanResult);
+          // First try business card OCR (primary purpose of gallery upload)
+          const cardScanResult = await scanBusinessCard(selectedImage.uri);
+          console.log('Business card scan successful:', cardScanResult);
           setScanSuccess(true);
           
           // Navigate back after a short delay to show success feedback
           setTimeout(() => {
             router.push('/');
           }, 1500);
-        } catch (qrError) {
-          console.log('QR scan failed, trying business card OCR:', qrError);
+        } catch (cardError) {
+          console.log('Business card OCR failed, trying QR code scan:', cardError);
           
           try {
-            // If QR scan fails, try business card OCR
-            const cardScanResult = await scanBusinessCard(selectedImage.uri);
-            console.log('Business card scan successful:', cardScanResult);
+            // If business card OCR fails, try QR code scanning as fallback
+            const qrScanResult = await scanQRCode(selectedImage.uri);
+            console.log('QR code scan successful:', qrScanResult);
             setScanSuccess(true);
             
             // Navigate back after a short delay to show success feedback
             setTimeout(() => {
               router.push('/');
             }, 1500);
-          } catch (cardError) {
-            console.error('Error scanning business card from gallery:', cardError);
+          } catch (qrError) {
+            console.error('Error scanning image from gallery:', qrError);
             
-            // If both QR and OCR fail, ask user to manually enter card details
+            // If both business card OCR and QR scan fail, ask user to manually enter card details
             if (cardError instanceof Error && cardError.message && cardError.message.includes('tesseract is not installed')) {
               promptForManualEntry(selectedImage.uri);
             } else {
               setProcessing(false);
               Alert.alert(
                 'Scan Failed',
-                'Could not scan QR code or extract text from the image. Please try another image or add the card manually.',
+                'Could not extract text or scan QR code from the image. Please try another image or add the card manually.',
                 [
                   { text: 'Try Another Image', onPress: () => {
                     setCapturedImage(null);
