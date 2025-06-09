@@ -275,7 +275,11 @@ export default function ScannerScreen() {
     if (cameraRef.current) {
       try {
         setProcessing(true);
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 }) as CameraCapturedPicture;
+        const photo = await cameraRef.current.takePictureAsync({ 
+          quality: 1.0,  // Maximum quality for better OCR
+          skipProcessing: false,  // Allow processing for better quality
+          exif: false  // Don't include EXIF data to reduce file size
+        }) as CameraCapturedPicture;
         setCapturedImage(photo.uri);
         
         try {
@@ -321,7 +325,11 @@ export default function ScannerScreen() {
     if (cameraRef.current) {
       try {
         setProcessing(true);
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 }) as CameraCapturedPicture;
+        const photo = await cameraRef.current.takePictureAsync({ 
+          quality: 1.0,  // Maximum quality for better OCR
+          skipProcessing: false,  // Allow processing for better quality
+          exif: false  // Don't include EXIF data to reduce file size
+        }) as CameraCapturedPicture;
         setCapturedImage(photo.uri);
         
         try {
@@ -380,7 +388,8 @@ export default function ScannerScreen() {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [16, 10], // Business card aspect ratio
-        quality: 0.8,
+        quality: 1.0,  // Maximum quality for better OCR
+        exif: false,  // Don't include EXIF data
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
