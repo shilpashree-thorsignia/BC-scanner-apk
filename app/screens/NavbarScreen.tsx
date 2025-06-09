@@ -71,15 +71,26 @@ const NavbarScreen: React.FC = () => {
 
   const TopBar = () => (
     <View style={[styles.topBar, { backgroundColor: isDark ? colors.background : '#fff' }]}>
-      <View style={styles.topBarContent}>
+      {/* First Line: Hamburger + Search */}
+      <View style={styles.topBarFirstLine}>
         <TouchableOpacity
           style={styles.hamburgerButton}
           onPress={() => setIsHamburgerVisible(true)}
         >
           <Ionicons name="menu-outline" size={24} color={isDark ? '#fff' : '#666'} />
         </TouchableOpacity>
+        <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6' }]}>
+          <Ionicons name="search-outline" size={20} color={isDark ? '#fff' : '#666'} style={styles.searchIcon} />
+          <TextInput
+            style={[styles.searchInput, { color: isDark ? '#fff' : '#1f2937' }]}
+            placeholder="Search Cards"
+            placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#999'}
+          />
+        </View>
+      </View>
 
-        
+      {/* Second Line: Filter, Sort, Trash, Select Icons */}
+      <View style={styles.topBarSecondLine}>
         {/* Filter Button */}
         <TouchableOpacity
           style={styles.filterButton}
@@ -101,13 +112,15 @@ const NavbarScreen: React.FC = () => {
           }}
         >
           <Ionicons name="swap-vertical-outline" size={20} color={isDark ? '#fff' : '#666'} />
+          <Text style={[styles.sortText, { color: isDark ? '#fff' : '#666' }]}>Sort</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.trashButton}
           onPress={() => router.push('/screens/TrashScreen' as any)}
         >
-          <Ionicons name="trash-outline" size={24} color={isDark ? '#fff' : '#666'} />
+          <Ionicons name="trash-outline" size={20} color={isDark ? '#fff' : '#666'} />
+          <Text style={[styles.trashText, { color: isDark ? '#fff' : '#666' }]}>Trash</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.selectButton}
@@ -115,9 +128,12 @@ const NavbarScreen: React.FC = () => {
         >
           <Ionicons 
             name={isSelectionMode ? "close" : "checkmark-circle-outline"} 
-            size={24} 
+            size={20} 
             color={isSelectionMode ? '#FF4444' : (isDark ? '#fff' : '#666')} 
           />
+          <Text style={[styles.selectText, { color: isSelectionMode ? '#FF4444' : (isDark ? '#fff' : '#666') }]}>
+            {isSelectionMode ? 'Cancel' : 'Select'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -344,17 +360,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  topBarFirstLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  topBarSecondLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    justifyContent: 'flex-start',
+  },
   hamburgerButton: {
     padding: 8,
   },
-
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    color: '#1f2937',
+  },
   trashButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
     marginLeft: 8,
+    gap: 4,
+  },
+  trashText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
   },
   selectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
     marginLeft: 8,
+    gap: 4,
+  },
+  selectText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
   },
   navigationBar: {
     backgroundColor: '#8ac041',
@@ -451,12 +510,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 8,
     marginLeft: 8,
+    gap: 4,
+  },
+  sortText: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
   },
   dropdown: {
     position: 'absolute',
-    top: 70,
+    top: 110,
     right: 16,
     backgroundColor: '#fff',
     borderRadius: 8,
