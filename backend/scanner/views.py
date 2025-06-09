@@ -338,36 +338,136 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
         
         return img
     
-    def preprocess_image_alternative(self, img):
-        """
-        Fast alternative preprocessing method for camera-captured images
-        Simplified for speed while maintaining effectiveness
-        """
-        # Convert to grayscale directly
+    def preprocess_enhanced_contrast(self, img):
+        """Enhanced contrast preprocessing with noise reduction"""
+        # Convert to grayscale
         if img.mode != 'L':
             img = img.convert('L')
         
-        # Resize to moderate resolution for speed
+        # Resize to high resolution for better OCR
         width, height = img.size
-        if width < 1000:
-            scale_factor = 1000 / width
-            new_size = (int(width * scale_factor), int(height * scale_factor))
-            img = img.resize(new_size, Image.Resampling.LANCZOS)
-        elif width > 2000:
-            scale_factor = 2000 / width
+        target_width = 2400
+        if width < target_width:
+            scale_factor = target_width / width
             new_size = (int(width * scale_factor), int(height * scale_factor))
             img = img.resize(new_size, Image.Resampling.LANCZOS)
         
         # Convert to numpy array
         img_array = np.array(img)
         
-        # Simple Otsu's thresholding (fast and effective)
+        # Apply Gaussian blur to reduce noise
+        img_array = cv2.GaussianBlur(img_array, (1, 1), 0)
+        
+        # Apply CLAHE for better contrast with smaller tiles
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4,4))
+        img_array = clahe.apply(img_array)
+        
+        # Morphological operations to clean up text
+        kernel = np.ones((1,1), np.uint8)
+        img_array = cv2.morphologyEx(img_array, cv2.MORPH_CLOSE, kernel)
+        
+        # Adaptive threshold with fine-tuned parameters
+        img_array = cv2.adaptiveThreshold(
+            img_array, 
+            255, 
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+            cv2.THRESH_BINARY, 
+            9,   # Smaller block size for finer details
+            4    # Higher C for better separation
+        )
+        
+        return Image.fromarray(img_array)
+    
+    def preprocess_sharp_binary(self, img):
+        """Sharp binary preprocessing with edge enhancement"""
+        # Convert to grayscale
+        if img.mode != 'L':
+            img = img.convert('L')
+        
+        # Resize
+        width, height = img.size
+        target_width = 2000
+        if width < target_width:
+            scale_factor = target_width / width
+            new_size = (int(width * scale_factor), int(height * scale_factor))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        img_array = np.array(img)
+        
+        # Apply unsharp mask for edge enhancement
+        blurred = cv2.GaussianBlur(img_array, (0, 0), 1.0)
+        img_array = cv2.addWeighted(img_array, 1.5, blurred, -0.5, 0)
+        
+        # Use Otsu's threshold with erosion/dilation
         _, img_array = cv2.threshold(img_array, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         
-        # Convert back to PIL
-        img = Image.fromarray(img_array)
+        # Clean up with morphological operations
+        kernel = np.ones((2,2), np.uint8)
+        img_array = cv2.morphologyEx(img_array, cv2.MORPH_CLOSE, kernel)
         
-        return img
+        return Image.fromarray(img_array)
+    
+    def preprocess_denoise_threshold(self, img):
+        """Denoising with bilateral filter before thresholding"""
+        # Convert to grayscale
+        if img.mode != 'L':
+            img = img.convert('L')
+        
+        # Resize
+        width, height = img.size
+        target_width = 2200
+        if width < target_width:
+            scale_factor = target_width / width
+            new_size = (int(width * scale_factor), int(height * scale_factor))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        img_array = np.array(img)
+        
+        # Apply bilateral filter for noise reduction while preserving edges
+        img_array = cv2.bilateralFilter(img_array, 9, 75, 75)
+        
+        # Use adaptive threshold
+        img_array = cv2.adaptiveThreshold(
+            img_array, 
+            255, 
+            cv2.ADAPTIVE_THRESH_MEAN_C, 
+            cv2.THRESH_BINARY, 
+            11, 
+            5
+        )
+        
+        return Image.fromarray(img_array)
+    
+    def preprocess_high_contrast(self, img):
+        """High contrast processing with histogram equalization"""
+        # Convert to grayscale
+        if img.mode != 'L':
+            img = img.convert('L')
+        
+        # Resize
+        width, height = img.size
+        target_width = 2400
+        if width < target_width:
+            scale_factor = target_width / width
+            new_size = (int(width * scale_factor), int(height * scale_factor))
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+        
+        img_array = np.array(img)
+        
+        # Apply histogram equalization
+        img_array = cv2.equalizeHist(img_array)
+        
+        # Apply median filter to reduce noise
+        img_array = cv2.medianBlur(img_array, 3)
+        
+        # Use multiple threshold methods and combine
+        _, thresh1 = cv2.threshold(img_array, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        thresh2 = cv2.adaptiveThreshold(img_array, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+        
+        # Combine the two thresholds
+        img_array = cv2.bitwise_and(thresh1, thresh2)
+        
+        return Image.fromarray(img_array)
 
     def extract_info(self, text):
         """
@@ -482,58 +582,131 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
         # Second pass: Extract name, company, job title, and address
         remaining_lines = processed_lines.copy()
         
-        # Extract name (look for proper name patterns)
+        # Enhanced name extraction with OCR error tolerance
         name_candidates = []
         for i, line in enumerate(remaining_lines):
             # Clean the line first
             clean_line = ' '.join(line.split())
             words = clean_line.split()
             
-            # Look for name patterns
-            if (len(words) >= 1 and len(words) <= 4 and 
-                len(clean_line) > 3 and len(clean_line) < 60 and
-                # Check if it looks like a name
-                clean_line[0].isupper() and
-                sum(1 for c in clean_line if c.isdigit()) <= 1 and  # Very few digits
-                not '@' in clean_line and not '.' in clean_line and  # Not email or website
-                not any(keyword in clean_line.lower() for keyword in job_keywords) and  # Not a job title
-                not any(indicator in clean_line.lower() for indicator in ['phone', 'tel', 'email', 'www', 'http'])):
-                
-                # Prefer names with 2-3 words (first name + last name)
-                if len(words) >= 2:
-                    name_candidates.insert(0, (i, clean_line))  # Prioritize multi-word names
-                elif len(words) == 1 and len(clean_line) >= 4 and len(clean_line) <= 20:
-                    name_candidates.append((i, clean_line))
+            # Skip lines that are clearly not names
+            if (len(clean_line) < 3 or len(clean_line) > 80 or
+                '@' in clean_line or 'http' in clean_line.lower() or
+                clean_line.lower().startswith(('www', 'email', 'phone', 'tel', 'mobile'))):
+                continue
+            
+            # Check for proper name patterns with OCR tolerance
+            name_score = 0
+            
+            # Basic name structure (1-4 words)
+            if 1 <= len(words) <= 4:
+                name_score += 2
+            
+            # Prefer 2-3 word names (first + last, or first + middle + last)
+            if 2 <= len(words) <= 3:
+                name_score += 3
+            
+            # Check for capitalization patterns
+            capitalized_words = sum(1 for word in words if word and word[0].isupper())
+            if capitalized_words >= len(words) * 0.7:  # Most words capitalized
+                name_score += 3
+            
+            # Check character composition
+            alpha_ratio = sum(1 for c in clean_line if c.isalpha()) / max(len(clean_line), 1)
+            if alpha_ratio > 0.8:  # Mostly alphabetic
+                name_score += 2
+            
+            # Penalty for too many digits or special characters
+            digit_count = sum(1 for c in clean_line if c.isdigit())
+            if digit_count <= 1:
+                name_score += 1
+            elif digit_count > 3:
+                name_score -= 2
+            
+            # Check against job title keywords (penalty if found)
+            if not any(keyword in clean_line.lower() for keyword in job_keywords):
+                name_score += 2
+            else:
+                name_score -= 3
+            
+            # Check for common name patterns
+            if re.match(r'^[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}', clean_line):
+                name_score += 4
+            
+            # Position bonus (names are often at the top)
+            if i <= 2:  # First 3 lines
+                name_score += 2
+            
+            # Add to candidates if score is reasonable
+            if name_score >= 5:
+                name_candidates.append((i, clean_line, name_score))
         
+        # Sort by score and choose the best
         if name_candidates:
-            # Choose the best name candidate
-            idx, name = name_candidates[0]
+            name_candidates.sort(key=lambda x: x[2], reverse=True)
+            idx, name, score = name_candidates[0]
             result['name'] = name
             remaining_lines.pop(idx)
         
-        # Extract job title using expanded keywords
+        # Enhanced job title extraction with better scoring
         job_candidates = []
         for i, line in enumerate(remaining_lines):
             clean_line = ' '.join(line.split())
             line_lower = clean_line.lower()
             
+            # Skip obviously non-job-title lines
+            if (len(clean_line) < 3 or len(clean_line) > 100 or
+                '@' in clean_line or 'http' in clean_line.lower() or
+                any(c.isdigit() for c in clean_line[:3])):  # Starts with numbers
+                continue
+            
+            job_score = 0
+            
             # Check for exact keyword matches
-            if any(keyword in line_lower for keyword in job_keywords):
-                job_candidates.append((i, clean_line, len(clean_line)))
-            # Check for partial matches to handle OCR errors
-            elif (any(keyword[:4] in line_lower for keyword in job_keywords if len(keyword) > 4) or
-                  'exec' in line_lower or 'mgr' in line_lower or 'dev' in line_lower or
-                  'business' in line_lower or 'development' in line_lower):
-                # Additional validation for partial matches
-                if (len(clean_line.split()) >= 2 and len(clean_line) > 8 and 
-                    not '@' in clean_line and not '.' in clean_line and
-                    not any(c.isdigit() for c in clean_line[:3])):  # Not starting with numbers
-                    job_candidates.append((i, clean_line, len(clean_line)))
+            exact_matches = sum(1 for keyword in job_keywords if keyword in line_lower)
+            job_score += exact_matches * 5
+            
+            # Check for partial matches and common job-related terms
+            partial_keywords = ['exec', 'mgr', 'dev', 'admin', 'coord', 'spec', 'rep', 'assoc']
+            partial_matches = sum(1 for keyword in partial_keywords if keyword in line_lower)
+            job_score += partial_matches * 3
+            
+            # Check for job-related patterns
+            if re.search(r'\b(executive|manager|director|head|lead|senior|junior)\b', line_lower):
+                job_score += 4
+            
+            if re.search(r'\b(business|development|sales|marketing|technical|operations)\b', line_lower):
+                job_score += 3
+            
+            # Prefer multi-word job titles
+            word_count = len(clean_line.split())
+            if 2 <= word_count <= 5:
+                job_score += 2
+            elif word_count > 5:
+                job_score -= 1  # Too long, probably not a job title
+            
+            # Check capitalization (job titles often have title case)
+            words = clean_line.split()
+            capitalized_words = sum(1 for word in words if word and word[0].isupper())
+            if capitalized_words >= len(words) * 0.6:  # Most words capitalized
+                job_score += 2
+            
+            # Position consideration (job titles often come after names)
+            if 1 <= i <= 4:  # Not first line but near top
+                job_score += 1
+            
+            # Length consideration (reasonable job title length)
+            if 10 <= len(clean_line) <= 50:
+                job_score += 1
+            
+            # Add to candidates if score is reasonable
+            if job_score >= 4:
+                job_candidates.append((i, clean_line, job_score))
         
         if job_candidates:
-            # Choose the longest job title (usually more complete and accurate)
+            # Choose the highest scoring job title
             job_candidates.sort(key=lambda x: x[2], reverse=True)
-            idx, job_title, _ = job_candidates[0]
+            idx, job_title, score = job_candidates[0]
             result['job_title'] = job_title
             remaining_lines.pop(idx)
         
@@ -628,9 +801,9 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             return None
 
     def extract_text_with_multiple_configs(self, img):
-        """Extract text using multiple preprocessing strategies for maximum accuracy"""
+        """Advanced OCR with enhanced preprocessing and character recognition"""
         
-        # Multiple preprocessing strategies
+        # Balanced preprocessing strategies - keep what works, add targeted improvements
         preprocessing_methods = [
             ('simple_threshold', self.preprocess_simple_threshold),
             ('adaptive_threshold', self.preprocess_image),
@@ -638,39 +811,55 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             ('minimal_processing', self.preprocess_minimal)
         ]
         
-        # OCR configurations
+        # OCR configurations - start with basic, add enhancements
         ocr_configs = [
-            ('psm6_clean', r'--oem 3 --psm 6'),
-            ('psm4_structured', r'--oem 3 --psm 4'),
-            ('psm3_mixed', r'--oem 3 --psm 3')
+            ('psm6_basic', r'--oem 3 --psm 6'),
+            ('psm4_basic', r'--oem 3 --psm 4'),
+            ('psm3_basic', r'--oem 3 --psm 3'),
+            ('psm6_enhanced', r'--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@.-+/: '),
+            ('psm4_enhanced', r'--oem 3 --psm 4 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@.-+/: ')
         ]
         
-        best_text = ''
-        best_confidence = 0
-        best_method = ''
+        best_results = []
         
+        # Test all combinations and collect results
         for method_name, preprocess_func in preprocessing_methods:
             try:
                 processed_img = preprocess_func(img.copy())
+                
+                # Save processed image for debugging
+                #processed_img.save(f'debug_{method_name}.png')
                 
                 for config_name, config in ocr_configs:
                     try:
                         current_text = pytesseract.image_to_string(processed_img, config=config)
                         
-                        # Calculate confidence score
-                        confidence = self.calculate_text_confidence(current_text)
+                        # Calculate enhanced confidence score
+                        confidence = self.calculate_enhanced_confidence(current_text)
                         
-                        print(f"Method: {method_name}, Config: {config_name}, Confidence: {confidence}")
+                        # Also calculate basic confidence for comparison
+                        basic_confidence = self.calculate_text_confidence(current_text)
                         
-                        if confidence > best_confidence:
-                            best_text = current_text
-                            best_confidence = confidence
-                            best_method = f"{method_name}_{config_name}"
+                        # Use the higher of the two confidence scores
+                        confidence = max(confidence, basic_confidence)
                         
-                        # Early exit if we found excellent results
+                        print(f"Method: {method_name}, Config: {config_name}")
+                        print(f"Text: {repr(current_text[:100])}")
+                        print(f"Confidence: {confidence}")
+                        print("---")
+                        
+                        best_results.append({
+                            'text': current_text,
+                            'confidence': confidence,
+                            'method': f"{method_name}_{config_name}",
+                            'preprocessing': method_name,
+                            'ocr_config': config_name
+                        })
+                        
+                        # Early exit for good results
                         if confidence >= 15:
-                            print(f"Excellent result found with {best_method}")
-                            return best_text
+                            print(f"Good result found with {method_name}_{config_name}")
+                            return current_text
                             
                     except Exception as e:
                         print(f"OCR failed for {method_name}_{config_name}: {str(e)}")
@@ -680,16 +869,19 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 print(f"Preprocessing failed for {method_name}: {str(e)}")
                 continue
         
-        print(f"Best method: {best_method}, Final confidence: {best_confidence}")
+        # Sort results by confidence and return the best
+        if best_results:
+            best_results.sort(key=lambda x: x['confidence'], reverse=True)
+            best_result = best_results[0]
+            print(f"Best method: {best_result['method']}, Final confidence: {best_result['confidence']}")
+            return best_result['text']
         
-        # If all methods failed, try basic OCR
-        if best_confidence == 0:
-            try:
-                best_text = pytesseract.image_to_string(img, config='--psm 6')
-            except:
-                best_text = pytesseract.image_to_string(img)
-        
-        return best_text
+        # Fallback to basic OCR if all methods fail
+        print("All methods failed, trying basic OCR")
+        try:
+            return pytesseract.image_to_string(img, config='--psm 6')
+        except:
+            return pytesseract.image_to_string(img)
     
     def calculate_text_confidence(self, text):
         """Calculate confidence score for extracted text"""
@@ -721,6 +913,85 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
         )
         
         return confidence
+    
+    def calculate_enhanced_confidence(self, text):
+        """Enhanced confidence calculation with better business card recognition"""
+        if not text or len(text.strip()) < 3:
+            return 0
+            
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        meaningful_lines = len([line for line in lines if len(line) > 2])
+        
+        # Enhanced pattern matching
+        email_pattern = r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+        phone_pattern = r'(?:\+91\s?)?(?:\d{10}|\d{3}[-.\s]?\d{3}[-.\s]?\d{4})'
+        website_pattern = r'(?:https?://)?(?:www\.)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        name_pattern = r'\b[A-Z][a-z]{2,}\s+[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]+)*\b'
+        
+        # Count valid patterns
+        email_matches = len(re.findall(email_pattern, text))
+        phone_matches = len(re.findall(phone_pattern, text))
+        website_matches = len(re.findall(website_pattern, text))
+        name_matches = len(re.findall(name_pattern, text))
+        
+        # Job title indicators
+        job_indicators = [
+            'manager', 'director', 'executive', 'officer', 'head', 'lead', 'senior', 'junior',
+            'ceo', 'cto', 'cfo', 'president', 'founder', 'developer', 'engineer', 'analyst',
+            'consultant', 'coordinator', 'administrator', 'representative', 'specialist',
+            'development', 'business', 'sales', 'marketing', 'operations', 'technical'
+        ]
+        has_job_title = any(indicator in text.lower() for indicator in job_indicators)
+        
+        # Company indicators
+        company_indicators = ['ltd', 'llc', 'inc', 'corp', 'pvt', 'solutions', 'services', 'technologies', 'systems']
+        has_company = any(indicator in text.lower() for indicator in company_indicators)
+        
+        # Text quality analysis
+        total_chars = len(text.replace(' ', '').replace('\n', ''))
+        alpha_chars = sum(1 for c in text if c.isalpha())
+        digit_chars = sum(1 for c in text if c.isdigit())
+        special_chars = sum(1 for c in text if not c.isalnum() and c not in ' \n\t')
+        
+        # Quality ratios
+        alpha_ratio = alpha_chars / max(total_chars, 1)
+        digit_ratio = digit_chars / max(total_chars, 1)
+        special_ratio = special_chars / max(total_chars, 1)
+        
+        # Check for OCR artifacts (repeated characters, nonsense patterns)
+        artifact_patterns = [
+            r'([a-zA-Z])\1{3,}',  # Repeated characters
+            r'[^a-zA-Z0-9@.\s\-+()]{3,}',  # Consecutive special chars
+            r'\b[a-zA-Z]{1,2}\b(?:\s+[a-zA-Z]{1,2}\b){3,}',  # Too many short words
+        ]
+        artifact_count = sum(len(re.findall(pattern, text)) for pattern in artifact_patterns)
+        
+        # Calculate comprehensive confidence score
+        confidence = (
+            meaningful_lines * 2 +           # More weight on meaningful content
+            email_matches * 15 +             # Email is highly valuable
+            phone_matches * 10 +             # Phone is valuable
+            website_matches * 8 +            # Website is valuable
+            name_matches * 12 +              # Proper names are very important
+            (has_job_title * 8) +            # Job titles are important
+            (has_company * 6) +              # Company info is valuable
+            (alpha_ratio * 15) +             # High alphabetic ratio is good
+            (digit_ratio * 5) +              # Some digits are normal
+            max(0, (0.2 - special_ratio) * 10) + # Too many special chars is bad
+            max(0, (10 - artifact_count) * 2)    # Penalize OCR artifacts
+        )
+        
+        # Bonus for reasonable line count (business cards typically have 4-10 meaningful lines)
+        if 4 <= meaningful_lines <= 10:
+            confidence += 5
+        
+        # Penalty for very short or very long text
+        if len(text.strip()) < 20:
+            confidence *= 0.5
+        elif len(text.strip()) > 1000:
+            confidence *= 0.7
+        
+        return max(0, confidence)
 
     @action(detail=False, methods=['POST'])
     def scan_card(self, request):
@@ -751,6 +1022,20 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             text = '\n'.join([line.strip() for line in best_text.split('\n') if line.strip()])
             print(f"Extracted text: {text}")
             
+            # Check if the text is completely garbled (too many artifacts)
+            if text:
+                # Calculate the ratio of meaningful characters
+                total_chars = len(text.replace(' ', '').replace('\n', ''))
+                alpha_chars = sum(1 for c in text if c.isalpha())
+                alpha_ratio = alpha_chars / max(total_chars, 1) if total_chars > 0 else 0
+                
+                # If text is heavily garbled (less than 40% alphabetic), try basic OCR
+                if alpha_ratio < 0.4 and total_chars > 50:
+                    print("Text appears garbled, trying basic OCR...")
+                    text = pytesseract.image_to_string(img, config='--psm 6')
+                    text = '\n'.join([line.strip() for line in text.split('\n') if line.strip()])
+                    print(f"Basic OCR text: {text}")
+            
             # Extract information from the text
             info = self.extract_info(text)
             print(f"Extracted info: {info}")
@@ -760,73 +1045,16 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             
             # Post-processing improvements for better data extraction
             
-            # If we didn't find a name but have email, try to extract name from email
-            if not info['name'] and info['email']:
-                name_part = info['email'].split('@')[0]
-                # Remove numbers and special chars, replace dots and underscores with spaces
-                name_guess = re.sub(r'[^a-zA-Z. ]+', '', name_part.replace('.', ' ').replace('_', ' ')).title()
-                if len(name_guess.split()) >= 2:  # If we got something that looks like a name
-                    info['name'] = name_guess
-            
-            # Try to find name from the first substantial line if still not found
-            if not info['name'] and text:
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
-                for line in lines[:3]:  # Check first 3 lines
-                    # Look for name-like patterns
-                    if (len(line.split()) >= 2 and len(line.split()) <= 4 and 
-                        len(line) > 5 and len(line) < 50 and
-                        not any(char.isdigit() for char in line) and
-                        not '@' in line and not '.' in line):
-                        info['name'] = line
-                        break
-            
-            # Improve company extraction
-            if not info['company'] and text:
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
-                # Look for company-like lines (usually have distinctive patterns)
-                for line in lines:
-                    if (len(line) > 3 and 
-                        (line.endswith('.com') or 
-                         any(indicator in line.lower() for indicator in ['solutions', 'technologies', 'systems', 'services']) or
-                         (sum(1 for c in line if c.isupper()) >= 2 and len(line) > 8))):
-                        if line != info['name'] and line != info['job_title']:
-                            info['company'] = line
-                            break
-            
-            # Clean up the notes to avoid duplication and raw text dump
-            clean_notes = None
-            if info.get('notes'):
-                if isinstance(info['notes'], list):
-                    clean_notes_list = []
-                    for note in info['notes']:
-                        # Skip notes that are already captured in other fields
-                        # Also skip single characters, random text, and OCR artifacts
-                        if (note and 
-                            note != info.get('name') and 
-                            note != info.get('email') and 
-                            note != info.get('mobile') and
-                            note != info.get('company') and
-                            note != info.get('job_title') and
-                            note != info.get('website') and
-                            note != info.get('address') and
-                            len(note) > 10 and  # Minimum meaningful length
-                            not note.isdigit() and  # Skip pure numbers
-                            not re.match(r'^[^a-zA-Z]*$', note) and  # Skip non-alphabetic
-                            ' ' in note):  # Must contain spaces (multiple words)
-                            clean_notes_list.append(note)
-                    
-                    # Only keep notes if we have meaningful content
-                    if clean_notes_list:
-                        clean_notes = ' | '.join(clean_notes_list[:3])  # Limit to 3 most relevant notes
-            
-            # Build a simple notes section without raw text dump
-            final_notes = []
-            if qr_data:
-                final_notes.append(f"QR Code: {qr_data[0]}")  # Only first QR code
-            if clean_notes:
-                final_notes.append(clean_notes)
-            
             # Create a new BusinessCard instance with extracted data
+            # Prepare notes - keep it simple
+            notes_list = []
+            if qr_data:
+                notes_list.append(f"QR Code: {qr_data[0]}")
+            if info.get('notes') and isinstance(info.get('notes'), list):
+                # Only add first few meaningful notes to avoid clutter
+                meaningful_notes = [note for note in info.get('notes')[:3] if note and len(note.strip()) > 5]
+                notes_list.extend(meaningful_notes)
+            
             business_card = BusinessCard(
                 name=info.get('name') or 'Unknown',
                 email=info.get('email'),
@@ -835,7 +1063,7 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 job_title=info.get('job_title'),
                 website=info.get('website'),
                 address=info.get('address'),
-                notes=' | '.join(final_notes) if final_notes else None
+                notes=' | '.join(notes_list) if notes_list else None
             )
             
             # Save the business card first to get an ID
