@@ -49,6 +49,19 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
     }
   };
 
+  const handleWebsitePress = (website: string) => {
+    if (website) {
+      // Ensure the URL has a protocol
+      let url = website;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+      }
+      Linking.openURL(url).catch(err => {
+        console.error('Error opening website:', err);
+      });
+    }
+  };
+
   // Use full name instead of splitting it
   const fullName = item.name || 'Not Provided';
 
@@ -93,7 +106,11 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
                 <Text style={[styles.email, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.email || 'Email not provided'}</Text>
                 <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.mobile || 'Phone not provided'}</Text>
                 {item.company && <Text style={[styles.company, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.company}</Text>}
-                {item.website && <Text style={[styles.website, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.website}</Text>}
+                {item.website && (
+                  <TouchableOpacity onPress={() => handleWebsitePress(item.website!)}>
+                    <Text style={[styles.website, styles.clickableLink, { color: '#2563EB' }]}>{item.website}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               <View style={styles.quoteSection}>
                 <Text style={[styles.quoteText, { color: isDark ? '#fff' : colors.secondaryText }]}>
@@ -339,6 +356,9 @@ const styles = StyleSheet.create({
   website: {
     fontSize: 10,
     color: '#4B5563',
+    textDecorationLine: 'underline',
+  },
+  clickableLink: {
     textDecorationLine: 'underline',
   },
   container: {

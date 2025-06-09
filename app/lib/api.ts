@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://192.168.1.30:8000/api';
+const API_BASE_URL = 'http://192.168.1.26:8000/api';
 
 export interface BusinessCard {
   id: number;
@@ -81,6 +81,41 @@ export const scanBusinessCard = async (imageUri: string): Promise<BusinessCard> 
     return response.json();
   } catch (error) {
     console.error('Error scanning business card:', error);
+    throw error;
+  }
+};
+
+export const scanQRCode = async (imageUri: string): Promise<BusinessCard> => {
+  try {
+    const formData = new FormData();
+    
+    // Create a file object from the image URI
+    const filename = imageUri.split('/').pop() || 'scan_image.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : 'image/jpeg';
+    
+    formData.append('image', {
+      uri: imageUri,
+      name: filename,
+      type,
+    } as any);
+
+    const response = await fetch(`${API_BASE_URL}/business-cards/scan_qr/`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to scan image');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error scanning image:', error);
     throw error;
   }
 };

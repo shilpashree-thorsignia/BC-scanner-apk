@@ -649,6 +649,301 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 'message': 'Error processing the image'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=False, methods=['POST'])
+    def scan_qr(self, request):
+        """Smart scanner: Try QR code first, fallback to business card OCR"""
+        if 'image' not in request.FILES:
+            return Response({'error': 'No image provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Get the uploaded file
+            image_file = request.FILES['image']
+            
+            # Create a copy of the file in memory to use for processing
+            from io import BytesIO
+            img_data = image_file.read()
+            
+            # Create a BytesIO object for the image
+            img_bytes = BytesIO(img_data)
+            img = Image.open(img_bytes)
+            
+            # First, try to process QR code
+            print("Starting QR code detection...")
+            qr_data = self.process_qr_code(img)
+            
+            if qr_data:
+                # QR code found - process as QR code ONLY
+                print(f"QR Code detected: {qr_data[0]}")
+                
+                # Parse QR code data to extract business card information
+                qr_text = qr_data[0]  # Get the first QR code
+                info = self.parse_qr_business_card(qr_text)
+                
+                # If no structured data found, treat the QR content as notes
+                if not any(info.values()):
+                    info = {
+                        'name': 'QR Code Data',
+                        'notes': qr_text
+                    }
+                
+                # Ensure we have at least a name
+                if not info.get('name'):
+                    info['name'] = 'QR Code Data'
+                
+                # If it's a web URL, ensure it's properly formatted
+                if info.get('website') and not info['website'].startswith(('http://', 'https://')):
+                    if info['website'].startswith('www.') or '.' in info['website']:
+                        info['website'] = f"https://{info['website']}"
+                
+                print(f"Parsed QR info: {info}")
+                
+                # Create a new BusinessCard instance with extracted data
+                business_card = BusinessCard(
+                    name=info.get('name') or 'QR Code Data',
+                    email=info.get('email'),
+                    mobile=info.get('mobile'),
+                    company=info.get('company'),
+                    job_title=info.get('job_title'),
+                    website=info.get('website'),
+                    address=info.get('address'),
+                    notes=info.get('notes')
+                )
+                
+                # Save the business card first to get an ID
+                business_card.save()
+                
+                # Save the image file
+                img_bytes.seek(0)  # Reset file pointer
+                business_card.image.save(
+                    f"qr_business_card_{business_card.id}.{image_file.name.split('.')[-1]}",
+                    img_bytes,
+                    save=True
+                )
+                
+                # Update the business card with the final data
+                business_card.save()
+                
+                serializer = self.get_serializer(business_card, context={'request': request})
+                
+                response_data = {
+                    'type': 'qr_business_card',
+                    'data': serializer.data,
+                    'message': 'QR code processed and saved successfully',
+                    'qr_code_data': qr_data,
+                    'extracted_info': info,
+                    'is_web_link': bool(info.get('website'))
+                }
+                
+                return Response(response_data, status=status.HTTP_201_CREATED)
+            
+            else:
+                # No QR code found - reject the image
+                return Response({
+                    'error': 'No QR code found in the image',
+                    'message': 'This scanner only accepts QR codes. Please ensure the QR code is clearly visible and try again.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"Error processing image: {error_trace}")
+            return Response({
+                'error': str(e),
+                'traceback': error_trace,
+                'message': 'Error processing the image'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+    def parse_qr_business_card(self, qr_text):
+        """Parse QR code text to extract business card information"""
+        info = {
+            'name': None,
+            'email': None,
+            'mobile': None,
+            'company': None,
+            'job_title': None,
+            'website': None,
+            'address': None,
+            'notes': None
+        }
+        
+        try:
+            # Check if it's a web URL
+            if self.is_web_url(qr_text):
+                return {
+                    'name': 'Web Link',
+                    'website': qr_text,
+                    'notes': f'QR Code Link: {qr_text}'
+                }
+            
+            # Check if it's a vCard format (BEGIN:VCARD)
+            elif qr_text.upper().startswith('BEGIN:VCARD'):
+                return self.parse_vcard(qr_text)
+            
+            # Check if it's a MECARD format
+            elif qr_text.upper().startswith('MECARD:'):
+                return self.parse_mecard(qr_text)
+            
+            # Check if it's structured data (JSON-like or key-value pairs)
+            elif any(delimiter in qr_text for delimiter in [':', '=', '\n', ';']):
+                return self.parse_structured_qr(qr_text)
+            
+            # If it's just plain text, try to extract information using regex
+            else:
+                return self.extract_info_from_plain_text(qr_text)
+                
+        except Exception as e:
+            print(f"Error parsing QR code: {str(e)}")
+            # If parsing fails, return the raw text as notes
+            return {'notes': qr_text}
+    
+    def is_web_url(self, text):
+        """Check if the text is a web URL"""
+        import re
+        url_pattern = re.compile(
+            r'^https?://'  # http:// or https://
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
+            r'localhost|'  # localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
+            r'(?::\d+)?'  # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+        
+        # Also check for common URL patterns without protocol
+        if not url_pattern.match(text):
+            # Check for www.domain.com or domain.com patterns
+            domain_pattern = re.compile(
+                r'^(?:www\.)?'  # optional www.
+                r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}'  # domain
+                r'(?:/\S*)?$', re.IGNORECASE)  # optional path
+            
+            if domain_pattern.match(text):
+                return True
+        
+        return bool(url_pattern.match(text))
+    
+    def parse_vcard(self, vcard_text):
+        """Parse vCard format QR code"""
+        info = {}
+        lines = vcard_text.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if ':' in line:
+                key, value = line.split(':', 1)
+                key = key.upper()
+                
+                if key == 'FN' or key == 'N':
+                    info['name'] = value
+                elif key.startswith('EMAIL'):
+                    info['email'] = value
+                elif key.startswith('TEL'):
+                    info['mobile'] = value
+                elif key == 'ORG':
+                    info['company'] = value
+                elif key == 'TITLE':
+                    info['job_title'] = value
+                elif key == 'URL':
+                    info['website'] = value
+                elif key.startswith('ADR'):
+                    info['address'] = value.replace(';', ', ')
+        
+        return info
+    
+    def parse_mecard(self, mecard_text):
+        """Parse MECARD format QR code"""
+        info = {}
+        # Remove MECARD: prefix
+        data = mecard_text[7:] if mecard_text.upper().startswith('MECARD:') else mecard_text
+        
+        # Split by semicolon
+        parts = data.split(';')
+        
+        for part in parts:
+            if ':' in part:
+                key, value = part.split(':', 1)
+                key = key.upper()
+                
+                if key == 'N':
+                    info['name'] = value
+                elif key == 'EMAIL':
+                    info['email'] = value
+                elif key == 'TEL':
+                    info['mobile'] = value
+                elif key == 'ORG':
+                    info['company'] = value
+                elif key == 'TITLE':
+                    info['job_title'] = value
+                elif key == 'URL':
+                    info['website'] = value
+                elif key == 'ADR':
+                    info['address'] = value
+        
+        return info
+    
+    def parse_structured_qr(self, qr_text):
+        """Parse structured QR code data (key-value pairs)"""
+        info = {}
+        
+        # Try different delimiters
+        lines = []
+        if '\n' in qr_text:
+            lines = qr_text.split('\n')
+        elif ';' in qr_text:
+            lines = qr_text.split(';')
+        else:
+            lines = [qr_text]
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Try different separators
+            for separator in [':', '=']:
+                if separator in line:
+                    key, value = line.split(separator, 1)
+                    key = key.strip().lower()
+                    value = value.strip()
+                    
+                    if any(name_key in key for name_key in ['name', 'full', 'fn']):
+                        info['name'] = value
+                    elif 'email' in key or 'mail' in key:
+                        info['email'] = value
+                    elif any(phone_key in key for phone_key in ['phone', 'tel', 'mobile', 'cell']):
+                        info['mobile'] = value
+                    elif any(company_key in key for company_key in ['company', 'org', 'organization']):
+                        info['company'] = value
+                    elif any(title_key in key for title_key in ['title', 'job', 'position']):
+                        info['job_title'] = value
+                    elif any(web_key in key for web_key in ['website', 'url', 'web']):
+                        info['website'] = value
+                    elif any(addr_key in key for addr_key in ['address', 'addr', 'location']):
+                        info['address'] = value
+                    break
+        
+        return info
+    
+    def extract_info_from_plain_text(self, text):
+        """Extract information from plain text using regex patterns"""
+        info = {}
+        
+        # Use the same extraction logic as the main extract_info method
+        extracted = self.extract_info(text)
+        
+        # Map the extracted info to our format
+        info['name'] = extracted.get('name')
+        info['email'] = extracted.get('email')
+        info['mobile'] = extracted.get('mobile')
+        info['company'] = extracted.get('company')
+        info['job_title'] = extracted.get('job_title')
+        info['website'] = extracted.get('website')
+        info['address'] = extracted.get('address')
+        
+        # If we couldn't extract much, store as notes
+        if not any([info['name'], info['email'], info['mobile']]):
+            info['notes'] = text
+        
+        return info
+
 
 class EmailConfigViewSet(viewsets.ModelViewSet):
     queryset = EmailConfig.objects.all()

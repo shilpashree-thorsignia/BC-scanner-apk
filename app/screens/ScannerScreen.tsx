@@ -3,9 +3,10 @@ import { View, Text, TouchableOpacity, SafeAreaView, Dimensions, Platform, Style
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import type { CameraCapturedPicture } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { getResponsiveData, scaleSize } from '../../constants/responsive';
-import { scanBusinessCard, createBusinessCard } from '../lib/api';
+import { scanBusinessCard, createBusinessCard, scanQRCode } from '../lib/api';
 
 // Define BusinessCard type locally if the import is not available
 type BusinessCard = {
@@ -315,6 +316,138 @@ export default function ScannerScreen() {
       }
     }
   };
+
+  const smartScan = async (): Promise<void> => {
+    if (cameraRef.current) {
+      try {
+        setProcessing(true);
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 }) as CameraCapturedPicture;
+        setCapturedImage(photo.uri);
+        
+        try {
+          // Try to call the smart scanner API (QR code first, then business card OCR)
+          const scanResult = await scanQRCode(photo.uri);
+          console.log('Smart scan successful:', scanResult);
+          setScanSuccess(true);
+          
+          // Navigate back after a short delay to show success feedback
+          setTimeout(() => {
+            router.push('/');
+          }, 1500);
+        } catch (scanError) {
+          console.error('Error in QR scan:', scanError);
+          setProcessing(false);
+          
+          const errorMessage = scanError instanceof Error ? scanError.message : 'Could not scan the QR code.';
+          
+          Alert.alert(
+            'QR Scan Failed',
+            errorMessage,
+            [
+              { text: 'Try Again', onPress: () => {
+                setCapturedImage(null);
+                setProcessing(false);
+              }},
+              { text: 'Cancel', onPress: () => {
+                setCapturedImage(null);
+                setProcessing(false);
+              }}
+            ]
+          );
+        }
+      } catch (error) {
+        console.error('Error taking picture for smart scan:', error);
+        setProcessing(false);
+        Alert.alert('Error', 'Failed to take picture. Please try again.');
+      }
+    }
+  };
+
+  const pickImageFromGallery = async (): Promise<void> => {
+    try {
+      // Request media library permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission Required', 'Permission to access camera roll is required!');
+        return;
+      }
+
+      setProcessing(true);
+
+      // Launch image picker
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [16, 10], // Business card aspect ratio
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedImage = result.assets[0];
+        setCapturedImage(selectedImage.uri);
+
+        try {
+          // First try QR code scanning
+          const qrScanResult = await scanQRCode(selectedImage.uri);
+          console.log('QR code scan successful:', qrScanResult);
+          setScanSuccess(true);
+          
+          // Navigate back after a short delay to show success feedback
+          setTimeout(() => {
+            router.push('/');
+          }, 1500);
+        } catch (qrError) {
+          console.log('QR scan failed, trying business card OCR:', qrError);
+          
+          try {
+            // If QR scan fails, try business card OCR
+            const cardScanResult = await scanBusinessCard(selectedImage.uri);
+            console.log('Business card scan successful:', cardScanResult);
+            setScanSuccess(true);
+            
+            // Navigate back after a short delay to show success feedback
+            setTimeout(() => {
+              router.push('/');
+            }, 1500);
+          } catch (cardError) {
+            console.error('Error scanning business card from gallery:', cardError);
+            
+            // If both QR and OCR fail, ask user to manually enter card details
+            if (cardError instanceof Error && cardError.message && cardError.message.includes('tesseract is not installed')) {
+              promptForManualEntry(selectedImage.uri);
+            } else {
+              setProcessing(false);
+              Alert.alert(
+                'Scan Failed',
+                'Could not scan QR code or extract text from the image. Please try another image or add the card manually.',
+                [
+                  { text: 'Try Another Image', onPress: () => {
+                    setCapturedImage(null);
+                    setProcessing(false);
+                  }},
+                  { text: 'Add Manually', onPress: () => {
+                    promptForManualEntry(selectedImage.uri);
+                  }},
+                  { text: 'Cancel', onPress: () => {
+                    setCapturedImage(null);
+                    setProcessing(false);
+                  }}
+                ]
+              );
+            }
+          }
+        }
+      } else {
+        // User cancelled image selection
+        setProcessing(false);
+      }
+    } catch (error) {
+      console.error('Error picking image from gallery:', error);
+      setProcessing(false);
+      Alert.alert('Error', 'Failed to access gallery. Please try again.');
+    }
+  };
   
   const promptForManualEntry = (imageUri: string) => {
     // On Android, Alert.prompt is not available, so we need to handle this differently
@@ -555,10 +688,8 @@ export default function ScannerScreen() {
         <View style={styles.actionBar}>
           <TouchableOpacity 
             style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={() => {
-              // TODO: Implement gallery picker
-              Alert.alert('Coming Soon', 'Gallery picker will be implemented soon');
-            }}
+            onPress={pickImageFromGallery}
+            disabled={processing}
           >
             <MaterialIcons name="photo-library" size={iconSize} color="#00A99D" />
           </TouchableOpacity>
@@ -577,10 +708,8 @@ export default function ScannerScreen() {
           
           <TouchableOpacity 
             style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={() => {
-              // TODO: Implement QR scanner
-              Alert.alert('Coming Sofon', 'QR scanner will be implemented soon');
-            }}
+            onPress={smartScan}
+            disabled={processing}
           >
             <MaterialIcons name="qr-code-scanner" size={iconSize} color="#00A99D" />
           </TouchableOpacity>
