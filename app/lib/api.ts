@@ -12,6 +12,8 @@ export interface BusinessCard {
   notes: string | null;
   image: string | null;
   created_at: string;
+  is_deleted: boolean;
+  deleted_at: string | null;
 }
 
 export interface EmailConfig {
@@ -122,10 +124,16 @@ export const scanQRCode = async (imageUri: string): Promise<BusinessCard> => {
 
 export const createBusinessCard = async (data: CreateCardData): Promise<BusinessCard> => {
   try {
-    // Convert fullName to name if it exists
+    // Format data for backend (create endpoint uses camelCase jobTitle)
     const formattedData = {
-      ...data,
       name: data.name || '',
+      email: data.email || null,
+      mobile: data.mobile || null,
+      company: data.company || null,
+      jobTitle: data.jobTitle || null, // Keep camelCase for create endpoint
+      website: data.website || null,
+      address: data.address || null,
+      notes: data.notes || null,
     };
 
     const response = await fetch(`${API_BASE_URL}/business-cards/`, {
@@ -172,6 +180,142 @@ export const getAllBusinessCards = async (): Promise<BusinessCard[]> => {
     if (error instanceof TypeError && error.message.includes('Network request failed')) {
       console.error('Network error - check if the server is running and accessible');
     }
+    throw error;
+  }
+};
+
+export const updateBusinessCard = async (id: number, data: CreateCardData): Promise<BusinessCard> => {
+  try {
+    // Map frontend field names to backend field names
+    const formattedData = {
+      name: data.name || '',
+      email: data.email || null,
+      mobile: data.mobile || null,
+      company: data.company || null,
+      job_title: data.jobTitle || null, // Convert camelCase to snake_case
+      website: data.website || null,
+      address: data.address || null,
+      notes: data.notes || null,
+    };
+
+    const response = await fetch(`${API_BASE_URL}/business-cards/${id}/`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(formattedData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update business card');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error updating business card:', error);
+    throw error;
+  }
+};
+
+export const deleteBusinessCard = async (id: number): Promise<{ message: string; deleted_at: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/business-cards/${id}/`, {
+      method: 'DELETE',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete business card');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error deleting business card:', error);
+    throw error;
+  }
+};
+
+export const restoreBusinessCard = async (id: number): Promise<{ message: string; data: BusinessCard }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/business-cards/${id}/restore/`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to restore business card');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error restoring business card:', error);
+    throw error;
+  }
+};
+
+export const getDeletedBusinessCards = async (): Promise<BusinessCard[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/business-cards/trash/`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to fetch deleted business cards: ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching deleted business cards:', error);
+    throw error;
+  }
+};
+
+export const permanentDeleteBusinessCard = async (id: number): Promise<{ message: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/business-cards/${id}/permanent_delete/`, {
+      method: 'DELETE',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to permanently delete business card');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error permanently deleting business card:', error);
+    throw error;
+  }
+};
+
+export const emptyTrash = async (): Promise<{ message: string }> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/business-cards/empty_trash/`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to empty trash');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error emptying trash:', error);
     throw error;
   }
 };
@@ -268,6 +412,12 @@ const api = {
   scanBusinessCard,
   createBusinessCard,
   getAllBusinessCards,
+  updateBusinessCard,
+  deleteBusinessCard,
+  restoreBusinessCard,
+  getDeletedBusinessCards,
+  permanentDeleteBusinessCard,
+  emptyTrash,
   createEmailConfig,
   getEmailConfig,
   updateEmailConfig,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,95 @@ import {
   Share,
   FlatList,
   ScrollView,
+  Alert,
+  Animated,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { BusinessCard as BusinessCardType } from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
 
 interface BusinessCardProps {
   item: BusinessCardType;
+  onDelete?: (id: number) => void;
+  onShowSnackbar?: (message: string, action?: () => void, actionText?: string) => void;
 }
 
-const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
+const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item, onDelete, onShowSnackbar }) => {
   const { colors, isDark } = useTheme();
+  const router = useRouter();
+  
+  const handleCardPress = () => {
+    Alert.alert(
+      'Card Options',
+      'What would you like to do with this business card?',
+      [
+        {
+          text: 'Edit',
+          onPress: () => {
+            // Navigate to edit screen with card data
+            router.push({
+              pathname: '/screens/EditBusinessCard',
+              params: { card: JSON.stringify(item) }
+            });
+          },
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Card',
+              'Are you sure you want to delete this business card?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const { deleteBusinessCard, restoreBusinessCard } = await import('../lib/api');
+                      const result = await deleteBusinessCard(item.id);
+                      
+                      // Call the onDelete callback to refresh the list
+                      if (onDelete) {
+                        onDelete(item.id);
+                      }
+
+                      // Show snackbar with restore option
+                      if (onShowSnackbar) {
+                        onShowSnackbar(
+                          'Business card moved to trash',
+                          async () => {
+                            try {
+                              await restoreBusinessCard(item.id);
+                              // Refresh the list after restore
+                              if (onDelete) {
+                                onDelete(-1); // Use -1 as a signal to refresh the entire list
+                              }
+                            } catch (error) {
+                              console.error('Error restoring card:', error);
+                              Alert.alert('Error', 'Failed to restore business card. Please try again.');
+                            }
+                          },
+                          'UNDO'
+                        );
+                      }
+                    } catch (error) {
+                      console.error('Error deleting card:', error);
+                      Alert.alert('Error', 'Failed to delete business card. Please try again.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handleWhatsApp = () => {
     if (item.mobile) {
       Linking.openURL(`https://wa.me/${item.mobile}`);
@@ -86,100 +164,71 @@ const BusinessCardComponent: React.FC<BusinessCardProps> = ({ item }) => {
 
   return (
     <View style={styles.cardContainer}>
-      <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}>
+      <TouchableOpacity 
+        style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.accent }]}
+        onPress={handleCardPress}
+        activeOpacity={0.7}
+      >
         <View style={styles.cardContent}>
           <View style={styles.topSection}>
             <View style={styles.nameAndTitleSection}>
               <View style={styles.nameContainer}>
                 <Text style={[styles.name, { color: isDark ? '#fff' : colors.text }]} numberOfLines={1} ellipsizeMode="tail">{fullName}</Text>
+                <Text style={[styles.dateInline, { color: isDark ? '#fff' : colors.secondaryText }]}>{createdDate}</Text>
               </View>
               <Text style={[styles.jobTitle, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.job_title || 'Not provided'}</Text>
-            </View>
-            <View style={[styles.dateContainer, { backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)' }]}>
-              <Text style={[styles.dateText, { color: isDark ? '#fff' : colors.secondaryText }]}>{createdDate}</Text>
             </View>
           </View>
 
           <View style={styles.middleSection}>
-            <View style={styles.contentSection}>
-              <View style={styles.contactSection}>
-                <Text style={[styles.email, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.email || 'Email not provided'}</Text>
-                <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.mobile || 'Phone not provided'}</Text>
-                {item.company && <Text style={[styles.company, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.company}</Text>}
-                {item.website && (
-                  <TouchableOpacity onPress={() => handleWebsitePress(item.website!)}>
-                    <Text style={[styles.website, styles.clickableLink, { color: '#2563EB' }]}>{item.website}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <View style={styles.quoteSection}>
-                <Text style={[styles.quoteText, { color: isDark ? '#fff' : colors.secondaryText }]}>
-                  {item.notes || "No additional notes provided"}
-                </Text>
-              </View>
+            <View style={styles.leftContentSection}>
+              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText }]}>Email:</Text>
+              <Text style={[styles.email, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.email || 'Not provided'}</Text>
+              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText, marginTop: 4 }]}>Phone:</Text>
+              <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.mobile || 'Not provided'}</Text>
             </View>
-            <View style={styles.rightSection}>
-              {item.address && (
-                <View style={[styles.dateContainer, { backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)' }]}>
-                  <Text style={[styles.dateText, { 
-                    color: isDark ? '#fff' : colors.secondaryText,
-                    textAlign: 'center'
-                  }]}>{item.address}</Text>
-                </View>
+            <View style={styles.rightContentSection}>
+              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText }]}>Company:</Text>
+              <Text style={[styles.company, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.company || 'Not provided'}</Text>
+              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText, marginTop: 4 }]}>Website:</Text>
+              {item.website ? (
+                <TouchableOpacity onPress={() => handleWebsitePress(item.website!)}>
+                  <Text style={[styles.website, styles.clickableLink, { color: '#2563EB' }]}>{item.website}</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={[styles.website, { color: isDark ? '#fff' : colors.secondaryText }]}>Not provided</Text>
               )}
-              <View style={[styles.dateContainer, { 
-                backgroundColor: isDark ? 'rgba(45, 55, 72, 0.9)' : 'rgba(255, 255, 255, 0.8)',
-                marginTop: 8
-              }]}>
-                <Text style={[styles.dateText, { 
-                  color: isDark ? '#fff' : colors.secondaryText,
-                  textAlign: 'center'
-                }]}>{createdDate}</Text>
-              </View>
             </View>
           </View>
 
           <View style={styles.horizontalGreenLine} />
 
           <View style={styles.bottomSection}>
-            <View style={styles.bottomLeftSection}>
-              <View style={styles.thorContainer}>
-                <View style={styles.thorTitleContainer}>
-                  <Text style={[styles.thorPrefix, { color: isDark ? '#fff' : undefined }]}>Thor</Text>
-                  <Text style={[styles.thorSuffix, { color: isDark ? '#fff' : undefined }]}>Signia</Text>
-                </View>
-                <Text style={[styles.thorTagline, { color: isDark ? '#fff' : undefined }]}>Committed Towards Progress</Text>
-              </View>
+            <View style={styles.actionButtonsInline}>
+              <TouchableOpacity
+                onPress={handleWhatsApp}
+                style={styles.actionButtonNoBg}
+              >
+                <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
+              </TouchableOpacity>
               
-              <Text style={[styles.atsaicText, { color: isDark ? '#fff' : undefined }]}>ATSAIC</Text>
+              <TouchableOpacity
+                onPress={handleCall}
+                style={styles.actionButtonNoBg}
+              >
+                <Ionicons name="call-outline" size={24} color="#2563EB" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={handleShare}
+                style={styles.actionButtonNoBg}
+              >
+                <Ionicons name="share-social-outline" size={24} color="#4B5563" />
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.connectWhatsApp, { color: isDark ? '#fff' : undefined }]}>Connect on WhatsApp</Text>
           </View>
         </View>
-      </View>
-      
-      <View style={styles.actionButtonsContainer}>
-        <TouchableOpacity
-          onPress={handleWhatsApp}
-          style={styles.actionButton}
-        >
-          <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          onPress={handleCall}
-          style={styles.actionButton}
-        >
-          <Ionicons name="call-outline" size={24} color="#2563EB" />
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          onPress={handleShare}
-          style={styles.actionButton}
-        >
-          <Ionicons name="share-social-outline" size={24} color="#4B5563" />
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -191,6 +240,7 @@ interface BusinessCardListProps {
   onRefresh?: () => void;
   refreshing?: boolean;
   filter?: FilterOption;
+  onCardDelete?: (id: number) => void;
 }
 
 interface FilterOptionProps {
@@ -222,13 +272,93 @@ const FilterOptionButton: React.FC<FilterOptionProps> = ({ label, value, isActiv
   );
 };
 
+// Snackbar component
+interface SnackbarProps {
+  visible: boolean;
+  message: string;
+  onDismiss: () => void;
+  action?: () => void;
+  actionText?: string;
+}
+
+const Snackbar: React.FC<SnackbarProps> = ({ visible, message, onDismiss, action, actionText }) => {
+  const { colors, isDark } = useTheme();
+  const translateY = useRef(new Animated.Value(100)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      // Auto dismiss after 5 seconds if no action
+      const timer = setTimeout(() => {
+        onDismiss();
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    } else {
+      Animated.timing(translateY, {
+        toValue: 100,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View
+      style={[
+        styles.snackbar,
+        {
+          backgroundColor: isDark ? '#333' : '#323232',
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      <Text style={[styles.snackbarText, { color: '#fff' }]}>{message}</Text>
+      {action && actionText && (
+        <TouchableOpacity onPress={action} style={styles.snackbarAction}>
+          <Text style={[styles.snackbarActionText, { color: colors.accent }]}>{actionText}</Text>
+        </TouchableOpacity>
+      )}
+      <TouchableOpacity onPress={onDismiss} style={styles.snackbarClose}>
+        <MaterialIcons name="close" size={20} color="#fff" />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 const BusinessCardList: React.FC<BusinessCardListProps> = ({
   cards,
   onRefresh,
   refreshing = false,
+  onCardDelete,
 }) => {
   const { colors } = useTheme();
   const [currentFilter, setCurrentFilter] = useState<FilterOption>('all');
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarAction, setSnackbarAction] = useState<(() => void) | undefined>();
+  const [snackbarActionText, setSnackbarActionText] = useState<string | undefined>();
+
+  const showSnackbar = (message: string, action?: () => void, actionText?: string) => {
+    setSnackbarMessage(message);
+    setSnackbarAction(() => action);
+    setSnackbarActionText(actionText);
+    setSnackbarVisible(true);
+  };
+
+  const hideSnackbar = () => {
+    setSnackbarVisible(false);
+    setSnackbarMessage('');
+    setSnackbarAction(undefined);
+    setSnackbarActionText(undefined);
+  };
   
   const handleFilterChange = (filter: FilterOption) => {
     setCurrentFilter(filter);
@@ -299,12 +429,25 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
       </View>
       <FlatList
         data={filteredCards}
-        renderItem={({ item }) => <BusinessCardComponent item={item} />}
+        renderItem={({ item }) => (
+          <BusinessCardComponent 
+            item={item} 
+            onDelete={onCardDelete} 
+            onShowSnackbar={showSnackbar}
+          />
+        )}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.list}
         refreshing={refreshing}
         onRefresh={onRefresh}
         showsVerticalScrollIndicator={false}
+      />
+      <Snackbar
+        visible={snackbarVisible}
+        message={snackbarMessage}
+        onDismiss={hideSnackbar}
+        action={snackbarAction}
+        actionText={snackbarActionText}
       />
     </View>
   );
@@ -421,18 +564,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  contentSection: {
-    flex: 1,
-    marginRight: 12,
-  },
-  rightSection: {
-    width: 100,
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  contactSection: {
-    marginBottom: 12,
-  },
+
   email: {
     fontSize: 10,
     color: '#4B5563',
@@ -441,14 +573,6 @@ const styles = StyleSheet.create({
   phone: {
     fontSize: 10,
     color: '#4B5563',
-  },
-  quoteSection: {
-  },
-  quoteText: {
-    fontSize: 9,
-    color: '#4B5563',
-    fontStyle: 'italic',
-    lineHeight: 11,
   },
   highlightGreen: {
     color: '#22C55E',
@@ -475,49 +599,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  bottomLeftSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-  },
-  thorContainer: {
-    alignItems: 'flex-start',
-  },
-  thorTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  thorPrefix: {
-    fontSize: 11,
-    fontWeight: '400',
-    color: '#22C55E',
-    lineHeight: 13,
-  },
-  thorSuffix: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#14B8A6',
-    lineHeight: 13,
-  },
-  thorTagline: {
-    fontSize: 7,
-    color: '#666',
-    marginTop: 1,
-  },
-  atsaicText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#374151',
-    letterSpacing: 1.1,
-  },
-  connectWhatsApp: {
-    fontSize: 7,
-    color: '#4B5563',
-  },
+
   actionButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 24,
+  },
+  actionButtonsInline: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
   },
   actionButton: {
     width: 40,
@@ -531,6 +623,70 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
+  },
+  actionButtonNoBg: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
+  leftContentSection: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  rightContentSection: {
+    flex: 1,
+    paddingLeft: 12,
+    alignItems: 'flex-start',
+  },
+  contactLabel: {
+    fontSize: 9,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dateInline: {
+    fontSize: 10,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginLeft: 8,
+  },
+  snackbar: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    backgroundColor: '#323232',
+    borderRadius: 8,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    zIndex: 1000,
+  },
+  snackbarText: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+  },
+  snackbarAction: {
+    marginLeft: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  snackbarActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  snackbarClose: {
+    marginLeft: 8,
+    padding: 4,
   },
 });
 

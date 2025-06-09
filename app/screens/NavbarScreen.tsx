@@ -63,6 +63,12 @@ const NavbarScreen: React.FC = () => {
             placeholderTextColor={isDark ? 'rgba(255,255,255,0.6)' : '#999'}
           />
         </View>
+        <TouchableOpacity
+          style={styles.trashButton}
+          onPress={() => router.push('/screens/TrashScreen' as any)}
+        >
+          <Ionicons name="trash-outline" size={24} color={isDark ? '#fff' : '#666'} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -170,6 +176,15 @@ const NavbarScreen: React.FC = () => {
             cards={cards}
             onRefresh={loadCards}
             refreshing={loading}
+            onCardDelete={(id) => {
+              if (id === -1) {
+                // Special case: refresh all cards (used for restore)
+                loadCards();
+              } else {
+                // Normal delete: remove card from local state
+                setCards(prevCards => prevCards.filter(card => card.id !== id));
+              }
+            }}
           />
         )}
         
@@ -230,6 +245,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     color: '#1f2937',
+  },
+  trashButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   navigationBar: {
     backgroundColor: '#8ac041',

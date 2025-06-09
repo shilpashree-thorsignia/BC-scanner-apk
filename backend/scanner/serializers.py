@@ -20,9 +20,11 @@ class BusinessCardSerializer(serializers.ModelSerializer):
             'notes',
             'image',
             'image_url',
-            'created_at'
+            'created_at',
+            'is_deleted',
+            'deleted_at'
         ]
-        read_only_fields = ('image_url',)
+        read_only_fields = ('image_url', 'deleted_at')
     
     def get_image_url(self, obj):
         if obj.image:

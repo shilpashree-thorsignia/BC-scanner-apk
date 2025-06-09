@@ -130,8 +130,86 @@ class UserLoginView(APIView):
             )
 
 class BusinessCardViewSet(viewsets.ModelViewSet):
-    queryset = BusinessCard.objects.all()
+    queryset = BusinessCard.objects.filter(is_deleted=False)  # Only show non-deleted cards by default
     serializer_class = BusinessCardSerializer
+
+    def get_queryset(self):
+        """Override to handle deleted/non-deleted cards based on query params"""
+        queryset = BusinessCard.objects.all()
+        
+        # Check if we want to see deleted cards
+        show_deleted = self.request.query_params.get('deleted', 'false').lower()
+        if show_deleted == 'true':
+            queryset = queryset.filter(is_deleted=True)
+        else:
+            queryset = queryset.filter(is_deleted=False)
+            
+        return queryset.order_by('-created_at')
+
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete instead of hard delete"""
+        from django.utils import timezone
+        
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.deleted_at = timezone.now()
+        instance.save()
+        
+        return Response({
+            'message': 'Business card moved to trash. You can restore it within 30 days.',
+            'deleted_at': instance.deleted_at
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['POST'])
+    def restore(self, request, pk=None):
+        """Restore a soft-deleted business card"""
+        try:
+            card = BusinessCard.objects.get(pk=pk, is_deleted=True)
+            card.is_deleted = False
+            card.deleted_at = None
+            card.save()
+            
+            serializer = self.get_serializer(card)
+            return Response({
+                'message': 'Business card restored successfully',
+                'data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except BusinessCard.DoesNotExist:
+            return Response({
+                'error': 'Business card not found in trash'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['DELETE'])
+    def permanent_delete(self, request, pk=None):
+        """Permanently delete a business card"""
+        try:
+            card = BusinessCard.objects.get(pk=pk, is_deleted=True)
+            card.delete()  # Hard delete
+            
+            return Response({
+                'message': 'Business card permanently deleted'
+            }, status=status.HTTP_200_OK)
+        except BusinessCard.DoesNotExist:
+            return Response({
+                'error': 'Business card not found in trash'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['GET'])
+    def trash(self, request):
+        """Get all deleted business cards"""
+        deleted_cards = BusinessCard.objects.filter(is_deleted=True).order_by('-deleted_at')
+        serializer = self.get_serializer(deleted_cards, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['POST'])
+    def empty_trash(self, request):
+        """Permanently delete all cards in trash"""
+        deleted_count = BusinessCard.objects.filter(is_deleted=True).count()
+        BusinessCard.objects.filter(is_deleted=True).delete()
+        
+        return Response({
+            'message': f'Permanently deleted {deleted_count} business cards from trash'
+        }, status=status.HTTP_200_OK)
 
     def create(self, request, *args, **kwargs):
         try:

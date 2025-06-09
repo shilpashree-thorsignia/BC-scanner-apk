@@ -24,6 +24,10 @@ class BusinessCard(models.Model):
     notes = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to='business_cards/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Soft delete fields
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.name
