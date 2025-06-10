@@ -20,6 +20,7 @@ class BusinessCardSerializer(serializers.ModelSerializer):
             'notes',
             'image',
             'image_url',
+            'type',
             'created_at',
             'is_deleted',
             'deleted_at'
