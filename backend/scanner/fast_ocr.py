@@ -283,7 +283,7 @@ class FastBusinessCardParser:
             # Classify each line
             if '@' in line or re.search(r'[a-zA-Z0-9._%+-]+\s*[@a]\s*[a-zA-Z0-9.-]*\s*[.]\s*[a-zA-Z]{2,}', line):
                 line_classifications[i] = 'email'
-            elif re.search(r'\b(?:\+91[-.\s]?)?\d{8,15}\b', line):
+            elif re.search(r'\b(?:\+91[-.\s]?)?\d{8,15}\b', line) or re.search(r'\+91\s+\d{5}\s+\d{5}', line):
                 line_classifications[i] = 'phone'
             elif any(pattern in line_lower for pattern in ['www', 'http', '.com', '.in', '.org', '.net']):
                 line_classifications[i] = 'website'
@@ -300,9 +300,19 @@ class FastBusinessCardParser:
                     line_classifications[i] = 'job_title'
                 else:
                     line_classifications[i] = 'unknown'
-            elif (any(indicator in line_lower for indicator in ['pvt', 'ltd', 'limited', 'inc', 'corp', 'llc', 'tata', 'business services', 'solutions', 'technologies', 'bank', 'finance', 'digital', 'group', 'company', 'enterprises']) or
-                  (len([c for c in line_clean if c.isupper()]) >= 3 and len(line_clean) <= 50 and 'services' in line_lower)):
-                line_classifications[i] = 'company'
+            elif (any(indicator in line_lower for indicator in ['pvt', 'ltd', 'limited', 'inc', 'corp', 'llc', 'business services', 'solutions', 'technologies', 'bank', 'finance', 'digital', 'group', 'company', 'enterprises']) or
+                  (len([c for c in line_clean if c.isupper()]) >= 3 and len(line_clean) <= 50 and 'services' in line_lower) or
+                  # Recognize proper company names (2-3 words, title case, no long sentences)
+                  (re.match(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}$', line_clean) and 
+                   len(line_clean.split()) <= 3 and 
+                   len(line_clean) <= 30 and
+                   not any(word in line_lower for word in ['help', 'like', 'your', 'scale', 'succeed', 'with', 'expert', 'strategy', 'driven', 'automation', 'connect', 'access', 'tools', 'resources']))):
+                # But exclude sentences or descriptions (things that are too long or contain helper words)
+                if not (len(line_clean) > 30 or 
+                       any(word in line_lower for word in ['help', 'like', 'your', 'businesses', 'scale', 'succeed', 'with', 'expert', 'strategy', 'driven', 'automation', 'connect', 'access', 'tools', 'resources'])):
+                    line_classifications[i] = 'company'
+                else:
+                    line_classifications[i] = 'unknown'
             elif (re.match(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$', line_clean) and 
                   len(line_clean.split()) >= 1 and len(line_clean.split()) <= 3 and
                   len(line_clean) <= 40 and
@@ -317,6 +327,18 @@ class FastBusinessCardParser:
             if line_classifications.get(i) == 'email':
                 # Look for email patterns in the line
                 if '@' in line:
+                    original_line = line.strip()
+                    
+                    # Handle space-separated domains like "abdul@thorsignia online"
+                    if re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\s+(online|com|in|org|net|co\.in|gmail|yahoo|hotmail)', line, re.IGNORECASE):
+                        email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\s+(online|com|in|org|net|co\.in|gmail|yahoo|hotmail)', line, re.IGNORECASE)
+                        if email_match:
+                            username_domain = email_match.group(1)
+                            extension = email_match.group(2).lower()
+                            result['email'] = f"{username_domain}.{extension}"
+                            used_lines.add(i)
+                            break
+                    
                     # Fix common OCR issues
                     cleaned = line.replace(' ', '').lower()
                     
@@ -330,6 +352,19 @@ class FastBusinessCardParser:
                             break
                         else:
                             # Try to fix missing dot in domain (common OCR error)
+                            # Special case for .online domains first
+                            if 'online' in cleaned:
+                                online_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*?)online', cleaned)
+                                if online_match:
+                                    email_part = online_match.group(1)
+                                    # Add missing dot if needed
+                                    if not email_part.endswith('.'):
+                                        email_part += '.'
+                                    result['email'] = email_part + 'online'
+                                    used_lines.add(i)
+                                    break
+                            
+                            # Then try other domains
                             email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*)(com|in|org|net|co\.in|gmail|yahoo|hotmail)', cleaned)
                             if email_match:
                                 email_part = email_match.group(1)
@@ -342,9 +377,9 @@ class FastBusinessCardParser:
                                 break
                     
                     # Try to reconstruct email from OCR errors
-                    elif re.search(r'[a-zA-Z0-9._%+-]+\s*[@a]\s*[a-zA-Z0-9.-]*\s*(com|in|org|net)', line, re.IGNORECASE):
+                    elif re.search(r'[a-zA-Z0-9._%+-]+\s*[@a]\s*[a-zA-Z0-9.-]*\s*(online|com|in|org|net)', line, re.IGNORECASE):
                         # Handle spaced out emails like "user @ domain . com"
-                        email_parts = re.search(r'([a-zA-Z0-9._%+-]+)\s*[@a]\s*([a-zA-Z0-9.-]*)\s*\.?\s*(com|in|org|net)', line, re.IGNORECASE)
+                        email_parts = re.search(r'([a-zA-Z0-9._%+-]+)\s*[@a]\s*([a-zA-Z0-9.-]*)\s*\.?\s*(online|com|in|org|net)', line, re.IGNORECASE)
                         if email_parts:
                             username = email_parts.group(1)
                             domain = email_parts.group(2)
@@ -353,11 +388,47 @@ class FastBusinessCardParser:
                             used_lines.add(i)
                             break
         
+        # Fallback: search all lines for email if not found
+        if not result['email']:
+            for i, line in enumerate(lines):
+                if i not in used_lines and '@' in line:
+                    # Handle space-separated domains like "abdul@thorsignia online"
+                    if re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\s+(online|com|in|org|net|co\.in|gmail|yahoo|hotmail)', line, re.IGNORECASE):
+                        email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+)\s+(online|com|in|org|net|co\.in|gmail|yahoo|hotmail)', line, re.IGNORECASE)
+                        if email_match:
+                            username_domain = email_match.group(1)
+                            extension = email_match.group(2).lower()
+                            result['email'] = f"{username_domain}.{extension}"
+                            used_lines.add(i)
+                            break
+                    
+                    # Standard email patterns
+                    cleaned = line.replace(' ', '').lower()
+                    
+                    # Special case for .online domains without dots
+                    if 'online' in cleaned and '@' in cleaned:
+                        online_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]*?)online', cleaned)
+                        if online_match:
+                            email_part = online_match.group(1)
+                            if not email_part.endswith('.'):
+                                email_part += '.'
+                            result['email'] = email_part + 'online'
+                            used_lines.add(i)
+                            break
+                    
+                    # Standard patterns
+                    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', cleaned)
+                    if email_match:
+                        result['email'] = email_match.group()
+                        used_lines.add(i)
+                        break
+        
         # Extract phone
         for i, line in enumerate(lines):
             if line_classifications.get(i) == 'phone':
                 # Look for various phone patterns
                 phone_patterns = [
+                    r'\+91\s+\d{5}\s+\d{5}',  # +91 96069 22297 format
                     r'\+91[-.\s]?\d{10}',  # +91 followed by 10 digits
                     r'\+91[-.\s]?\d{5}[-.\s]?\d{5}',  # +91 with 5+5 format
                     r'\b\d{5}[-.\s]+\d{5}\b',  # 5+5 format
@@ -382,6 +453,33 @@ class FastBusinessCardParser:
                             break
                 if result['mobile']:
                     break
+        
+        # Fallback: search all lines for phone if not found
+        if not result['mobile']:
+            for i, line in enumerate(lines):
+                if i not in used_lines:
+                    # Look for phone patterns in any line
+                    phone_patterns = [
+                        r'\+91\s+\d{5}\s+\d{5}',  # +91 96069 22297 format
+                        r'\+91[-.\s]?\d{10}',  # +91 followed by 10 digits
+                        r'\+91[-.\s]?\d{5}[-.\s]?\d{5}',  # +91 with 5+5 format
+                        r'\b\d{5}[-.\s]+\d{5}\b',  # 5+5 format
+                        r'\b\d{10}\b',  # 10 consecutive digits
+                    ]
+                    
+                    for pattern in phone_patterns:
+                        phone_matches = re.findall(pattern, line)
+                        if phone_matches:
+                            for phone in phone_matches:
+                                clean_phone = re.sub(r'[^\d+]', '', phone)
+                                if len(clean_phone.replace('+', '')) >= 10:
+                                    result['mobile'] = phone.strip()
+                                    used_lines.add(i)
+                                    break
+                            if result['mobile']:
+                                break
+                    if result['mobile']:
+                        break
         
         # Extract website with enhanced OCR error tolerance
         for i, line in enumerate(lines):
