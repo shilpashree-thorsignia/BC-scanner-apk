@@ -2,6 +2,7 @@ import re
 import cv2
 import numpy as np
 import pytesseract
+import os
 from pyzbar.pyzbar import decode
 from PIL import Image, ImageEnhance, ImageFilter
 from rest_framework import viewsets, status
@@ -12,8 +13,28 @@ from rest_framework.permissions import AllowAny
 from .models import BusinessCard, UserProfile, EmailConfig
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
 
-# Set Tesseract path (update this path if Tesseract is installed elsewhere)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Set Tesseract path (dynamically detect based on environment)
+import platform
+from decouple import config
+
+# Configure Tesseract path based on environment
+if platform.system() == 'Windows':
+    # Windows path (for local development)
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+else:
+    # Linux/Unix path (for Vercel/production)
+    tesseract_cmd = config('TESSERACT_CMD', default='/usr/bin/tesseract')
+    if os.path.exists(tesseract_cmd):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+    else:
+        # Try common paths
+        common_paths = ['/usr/bin/tesseract', '/usr/local/bin/tesseract', '/opt/homebrew/bin/tesseract']
+        for path in common_paths:
+            if os.path.exists(path):
+                pytesseract.pytesseract.tesseract_cmd = path
+                break
+        else:
+            print("⚠️ Warning: Tesseract not found. OCR functionality may not work.")
 
 # Import the fast OCR system
 try:

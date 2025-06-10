@@ -1,0 +1,89 @@
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Database files
+*.sqlite3
+db.sqlite3
+
+# Media files (uploaded content - should use cloud storage in production)
+media/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables (use Vercel dashboard instead)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Documentation
+docs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Local development
+.local/
+.cache/
+
+# Backup files
+*.bak
+*.backup
+*.old 
