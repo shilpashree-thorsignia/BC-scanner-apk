@@ -20,6 +20,12 @@ wheel==0.45.1
 pyzbar==0.1.9
 python-decouple==3.8
 
+# Production dependencies
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+whitenoise==6.6.0
+dj-database-url==2.1.0
+
 # Deep Learning OCR Libraries
 easyocr>=1.7.0
 transformers>=4.36.0
