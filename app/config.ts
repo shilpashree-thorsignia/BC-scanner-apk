@@ -2,7 +2,7 @@
 // Environment-aware API base URL configuration
 
 // For development, you can set these manually or use environment variables
-const PRODUCTION_API_URL = 'https://your-backend-vercel-app.vercel.app/api';
+const PRODUCTION_API_URL = 'https://bc-scanner-app-3n29.vercel.app/api';
 const LOCAL_DEVELOPMENT_URL = 'http://192.168.1.26:8000/api';
 
 // Auto-detect environment and set API base URL

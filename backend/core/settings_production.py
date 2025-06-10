@@ -50,11 +50,12 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # CORS settings for production
 CORS_ALLOWED_ORIGINS = [
-    "https://your-frontend-domain.vercel.app",  # Update this with your actual frontend domain
+    "https://bc-scanner-app-3n29.vercel.app",  # Your deployed backend domain
     "http://localhost:3000",  # For local development
     "http://127.0.0.1:3000",  # For local development
     "http://localhost:8081",  # For React Native/Expo development
     "http://192.168.1.26:8081",  # For React Native/Expo on local network
+    "exp://192.168.1.26:8081",  # For Expo development
 ]
 
 # Allow all origins for development (disable for production)
