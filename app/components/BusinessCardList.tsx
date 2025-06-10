@@ -686,8 +686,7 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
         action={snackbarAction}
         actionText={snackbarActionText}
       />
-      
-      {/* MultiCardShareView removed - now using multi-delete functionality */}
+
     </View>
   );
 };

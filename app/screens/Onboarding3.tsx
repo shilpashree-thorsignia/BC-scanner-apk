@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AntDesign } from '@expo/vector-icons';
-import CustomStatusBar from '../../components/CustomStatusBar';
+import CustomStatusBar from '../components/CustomStatusBar';
 
 const Onboarding3: React.FC = () => {
   const router = useRouter();

@@ -213,25 +213,7 @@ const NavbarScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
 
-        {/* Scan QR Button (Hidden but preserving logic) */}
-        <TouchableOpacity 
-          style={[styles.hiddenButton]}
-          onPress={() => {
-            setActiveTab('scan-qr');
-            router.push('/scanner' as any);
-          }}
-        >
-        </TouchableOpacity>
 
-        {/* Scan Card Button (Hidden but preserving logic) */}
-        <TouchableOpacity 
-          style={[styles.hiddenButton]}
-          onPress={() => {
-            setActiveTab('scan-card');
-            router.push('/screens/ScannerScreen' as any);
-          }}
-        >
-        </TouchableOpacity>
 
         {/* Add Button */}
         <TouchableOpacity 
@@ -452,12 +434,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
-  hiddenButton: {
-    width: 0,
-    height: 0,
-    opacity: 0,
-    position: 'absolute',
-  },
+
   navigationButtonText: {
     color: '#fff',
     fontSize: 12,

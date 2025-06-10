@@ -48,26 +48,26 @@ A comprehensive React Native mobile application with Django REST API backend for
 ```
 BC-scanner-app/
 ├── app/                          # React Native App (Expo Router)
-│   ├── (tabs)/                   # Tab-based navigation
-│   │   ├── index.tsx            # Home screen with business card list
-│   │   └── settings.tsx         # Settings screen
-│   ├── (modals)/                # Modal screens
 │   ├── components/              # Reusable UI components
 │   │   ├── BusinessCardList.tsx # Main business card display component with multi-select
-│   │   ├── MultiCardShareView.tsx # Combined layout for sharing multiple cards
-│   │   └── ...
+│   │   ├── AddCardModal.tsx     # Modal for manually adding cards
+│   │   └── CustomStatusBar.tsx  # Custom status bar component
 │   ├── screens/                 # Screen components
 │   │   ├── ScannerScreen.tsx    # Camera/gallery scanning interface
 │   │   ├── EditBusinessCard.tsx # Edit business card form
 │   │   ├── TrashScreen.tsx      # Deleted cards management
+│   │   ├── NavbarScreen.tsx     # Main navigation screen
+│   │   ├── SettingsScreen.tsx   # Settings and preferences
+│   │   ├── ProfileScreen.tsx    # User profile management
 │   │   └── ...
 │   ├── lib/                     # API and utility functions
 │   │   ├── api.ts              # API client with all endpoints
 │   │   └── ...
 │   ├── context/                 # React Context providers
-│   ├── types/                   # TypeScript type definitions
 │   ├── utils/                   # Utility functions
 │   ├── config.ts               # API configuration
+│   ├── settings.tsx            # Settings screen route
+│   ├── index.tsx               # App entry point
 │   └── _layout.tsx             # Root layout component
 ├── backend/                     # Django REST API
 │   ├── core/                   # Django project settings
@@ -84,8 +84,8 @@ BC-scanner-app/
 │   ├── requirements.txt       # Python dependencies
 │   └── manage.py             # Django management script
 ├── assets/                    # Static assets (images, fonts)
-├── components/               # Shared components
 ├── constants/               # App constants
+│   └── responsive.ts        # Responsive design utilities
 ├── package.json            # Node.js dependencies
 └── README.md              # This file
 ```
