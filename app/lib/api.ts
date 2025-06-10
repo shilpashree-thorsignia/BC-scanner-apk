@@ -14,6 +14,7 @@ export interface BusinessCard {
   created_at: string;
   is_deleted: boolean;
   deleted_at: string | null;
+  type?: string; // 'qr_business_card' for QR scanned cards
 }
 
 export interface EmailConfig {

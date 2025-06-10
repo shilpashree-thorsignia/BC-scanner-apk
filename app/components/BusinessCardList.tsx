@@ -197,7 +197,10 @@ const BusinessCardComponent = React.forwardRef<BusinessCardRef, BusinessCardProp
   };
 
   // Use full name instead of splitting it
-  const fullName = item.name || 'Not Provided';
+  // For QR scanned cards, show "QR Code Data" instead of generic names like "Web Link"
+  const fullName = item.type === 'qr_business_card' && (item.name === 'Web Link' || item.name === 'Website' || !item.name) 
+    ? 'QR Code Data' 
+    : item.name || 'Not Provided';
 
   // Format the created date
   const formatDate = (dateString: string) => {
@@ -251,12 +254,18 @@ const BusinessCardComponent = React.forwardRef<BusinessCardRef, BusinessCardProp
               <Text style={[styles.businessCardName, { color: isDark ? '#fff' : '#1F2937' }]} numberOfLines={1} ellipsizeMode="tail">
                 {fullName}
               </Text>
-              <Text style={[styles.businessCardTitle, { color: isDark ? '#B0B0B0' : '#6B7280' }]} numberOfLines={1} ellipsizeMode="tail">
-                {item.job_title || 'Position not specified'}
-              </Text>
-              <Text style={[styles.businessCardCompany, { color: isDark ? '#A0A0A0' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
-                {item.company || 'Company not specified'}
-              </Text>
+              {/* Only show job title if it exists */}
+              {item.job_title && (
+                <Text style={[styles.businessCardTitle, { color: isDark ? '#B0B0B0' : '#6B7280' }]} numberOfLines={1} ellipsizeMode="tail">
+                  {item.job_title}
+                </Text>
+              )}
+              {/* Only show company if it exists */}
+              {item.company && (
+                <Text style={[styles.businessCardCompany, { color: isDark ? '#A0A0A0' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                  {item.company}
+                </Text>
+              )}
             </View>
             <View style={styles.dateSection}>
               <Text style={[styles.dateText, { color: isDark ? '#888' : '#9CA3AF' }]}>{createdDate}</Text>
@@ -266,21 +275,28 @@ const BusinessCardComponent = React.forwardRef<BusinessCardRef, BusinessCardProp
           {/* Contact Information */}
           <View style={styles.contactSection}>
             <View style={styles.contactGrid}>
-              <View style={styles.contactItem}>
-                <Ionicons name="mail-outline" size={14} color="#6B7280" style={styles.contactIcon} />
-                <Text style={[styles.contactText, { color: isDark ? '#fff' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
-                  {item.email || 'Email not provided'}
-                </Text>
-              </View>
+              {/* Only show email if it exists */}
+              {item.email && (
+                <View style={styles.contactItem}>
+                  <Ionicons name="mail-outline" size={14} color="#6B7280" style={styles.contactIcon} />
+                  <Text style={[styles.contactText, { color: isDark ? '#fff' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {item.email}
+                  </Text>
+                </View>
+              )}
               
-              <View style={styles.contactItem}>
-                <Ionicons name="call-outline" size={14} color="#6B7280" style={styles.contactIcon} />
-                <Text style={[styles.contactText, { color: isDark ? '#fff' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
-                  {item.mobile || 'Phone not provided'}
-                </Text>
-              </View>
+              {/* Only show phone if it exists */}
+              {item.mobile && (
+                <View style={styles.contactItem}>
+                  <Ionicons name="call-outline" size={14} color="#6B7280" style={styles.contactIcon} />
+                  <Text style={[styles.contactText, { color: isDark ? '#fff' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                    {item.mobile}
+                  </Text>
+                </View>
+              )}
               
-              {item.website && (
+              {/* Show website for regular cards */}
+              {item.type !== 'qr_business_card' && item.website && (
                 <View style={styles.contactItem}>
                   <Ionicons name="globe-outline" size={14} color="#6B7280" style={styles.contactIcon} />
                   <TouchableOpacity onPress={() => handleWebsitePress(item.website!)}>
@@ -292,6 +308,25 @@ const BusinessCardComponent = React.forwardRef<BusinessCardRef, BusinessCardProp
               )}
             </View>
           </View>
+
+          {/* QR Code Section - Only for QR scanned cards */}
+          {item.type === 'qr_business_card' && (
+            <View style={styles.qrSection}>
+              <View style={styles.qrHeader}>
+                <Ionicons name="qr-code-outline" size={16} color="#22C55E" style={styles.qrIcon} />
+                <Text style={[styles.qrTitle, { color: isDark ? '#22C55E' : '#16A085' }]}>
+                  Scanned QR Code
+                </Text>
+              </View>
+              {item.website && (
+                <TouchableOpacity onPress={() => handleWebsitePress(item.website!)} style={styles.qrContent}>
+                  <Text style={[styles.qrData, { color: isDark ? '#60A5FA' : '#2563EB' }]} numberOfLines={2} ellipsizeMode="tail">
+                    {item.website}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           {/* Action Buttons */}
           <View style={styles.actionSection}>
@@ -1038,6 +1073,36 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+  },
+  qrSection: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  qrHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  qrIcon: {
+    marginRight: 8,
+  },
+  qrTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#16A085',
+  },
+  qrContent: {
+    paddingLeft: 24,
+  },
+  qrData: {
+    fontSize: 13,
+    color: '#2563EB',
+    textDecorationLine: 'underline',
+    lineHeight: 18,
   },
 });
 

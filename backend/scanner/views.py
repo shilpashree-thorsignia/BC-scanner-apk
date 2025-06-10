@@ -2936,7 +2936,8 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                     job_title=info.get('job_title'),
                     website=info.get('website'),
                     address=info.get('address'),
-                    notes=info.get('notes')
+                    notes=info.get('notes'),
+                    type='qr_business_card'
                 )
                 
                 # Save the business card first to get an ID

@@ -14,6 +14,11 @@ class UserProfile(models.Model):
         return f"{self.first_name} {self.last_name} - {self.email}"
 
 class BusinessCard(models.Model):
+    CARD_TYPE_CHOICES = [
+        ('regular', 'Regular Business Card'),
+        ('qr_business_card', 'QR Code Business Card'),
+    ]
+    
     name = models.CharField(max_length=200)
     email = models.EmailField(blank=True, null=True)
     mobile = models.CharField(max_length=20, blank=True, null=True)
@@ -23,6 +28,7 @@ class BusinessCard(models.Model):
     address = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to='business_cards/', blank=True, null=True)
+    type = models.CharField(max_length=20, choices=CARD_TYPE_CHOICES, default='regular')
     created_at = models.DateTimeField(auto_now_add=True)
     
     # Soft delete fields

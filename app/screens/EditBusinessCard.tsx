@@ -234,11 +234,11 @@ const EditBusinessCard = () => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Website</Text>
+              <Text style={styles.label}>{businessCard.type === 'qr_business_card' ? 'QR Data' : 'Website'}</Text>
               <TextInput
-                placeholder="Enter website"
+                placeholder={businessCard.type === 'qr_business_card' ? 'QR code data' : 'Enter website'}
                 style={styles.input}
-                keyboardType="url"
+                keyboardType={businessCard.type === 'qr_business_card' ? 'default' : 'url'}
                 value={formData.website}
                 onChangeText={(text) => handleInputChange('website', text)}
                 autoCapitalize="none"

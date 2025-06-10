@@ -42,7 +42,7 @@ const generateCardHTML = (card: BusinessCard): string => {
           <div>
             <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #000;">${firstName}</h2>
             <h2 style="margin: 0; font-size: 18px; font-weight: 700; color: #000;">${surname}</h2>
-            <p style="margin: 1px 0 0; font-size: 12px; color: #666; font-style: italic;">${card.job_title || 'Not provided'}</p>
+            ${card.job_title ? `<p style="margin: 1px 0 0; font-size: 12px; color: #666; font-style: italic;">${card.job_title}</p>` : ''}
           </div>
           
           <!-- Date -->
@@ -55,16 +55,16 @@ const generateCardHTML = (card: BusinessCard): string => {
         <div style="margin-bottom: 8px;">
           <!-- Contact Info -->
           <div style="margin-bottom: 4px;">
-            <p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.email || 'Email not provided'}</p>
-            <p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.mobile || 'Phone not provided'}</p>
+            ${card.email ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.email}</p>` : ''}
+            ${card.mobile ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.mobile}</p>` : ''}
             ${card.company ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563;">${card.company}</p>` : ''}
-            ${card.website ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563; text-decoration: underline;">${card.website}</p>` : ''}
+            ${card.type === 'qr_business_card' ? `<p style="margin: 0 0 1px; font-size: 12px; color: #22C55E; font-weight: 600;">📱 Scanned QR</p>` : card.website ? `<p style="margin: 0 0 1px; font-size: 12px; color: #4B5563; text-decoration: underline;">${card.website}</p>` : ''}
           </div>
           
           <!-- Notes -->
-          <div>
-            <p style="margin: 0; font-size: 11px; color: #4B5563; font-style: italic;">${card.notes || 'No additional notes provided'}</p>
-          </div>
+          ${card.notes ? `<div>
+            <p style="margin: 0; font-size: 11px; color: #4B5563; font-style: italic;">${card.notes}</p>
+          </div>` : ''}
         </div>
         
         <!-- Horizontal green line -->
