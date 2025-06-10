@@ -17,7 +17,6 @@ import { BusinessCard as BusinessCardType } from '../lib/api';
 import { useTheme } from '../context/ThemeContext';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import MultiCardShareView from './MultiCardShareView';
 
 interface BusinessCardProps {
   item: BusinessCardType;
@@ -245,62 +244,68 @@ const BusinessCardComponent = React.forwardRef<BusinessCardRef, BusinessCardProp
               />
             </View>
           )}
-          <View style={styles.topSection}>
-            <View style={styles.nameAndTitleSection}>
-              <View style={styles.nameContainer}>
-                <Text style={[styles.name, { color: isDark ? '#fff' : colors.text }]} numberOfLines={1} ellipsizeMode="tail">{fullName}</Text>
-                <Text style={[styles.dateInline, { color: isDark ? '#fff' : colors.secondaryText }]}>{createdDate}</Text>
-              </View>
-              <Text style={[styles.jobTitle, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.job_title || 'Not provided'}</Text>
+          
+          {/* Business Card Header */}
+          <View style={styles.businessCardHeader}>
+            <View style={styles.nameSection}>
+              <Text style={[styles.businessCardName, { color: isDark ? '#fff' : '#1F2937' }]} numberOfLines={1} ellipsizeMode="tail">
+                {fullName}
+              </Text>
+              <Text style={[styles.businessCardTitle, { color: isDark ? '#B0B0B0' : '#6B7280' }]} numberOfLines={1} ellipsizeMode="tail">
+                {item.job_title || 'Position not specified'}
+              </Text>
+              <Text style={[styles.businessCardCompany, { color: isDark ? '#A0A0A0' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                {item.company || 'Company not specified'}
+              </Text>
+            </View>
+            <View style={styles.dateSection}>
+              <Text style={[styles.dateText, { color: isDark ? '#888' : '#9CA3AF' }]}>{createdDate}</Text>
             </View>
           </View>
 
-          <View style={styles.middleSection}>
-            <View style={styles.leftContentSection}>
-              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText }]}>Email:</Text>
-              <Text style={[styles.email, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.email || 'Not provided'}</Text>
-              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText, marginTop: 4 }]}>Phone:</Text>
-              <Text style={[styles.phone, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.mobile || 'Not provided'}</Text>
-            </View>
-            <View style={styles.rightContentSection}>
-              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText }]}>Company:</Text>
-              <Text style={[styles.company, { color: isDark ? '#fff' : colors.secondaryText }]}>{item.company || 'Not provided'}</Text>
-              <Text style={[styles.contactLabel, { color: isDark ? '#fff' : colors.secondaryText, marginTop: 4 }]}>Website:</Text>
-              {item.website ? (
-                <TouchableOpacity onPress={() => handleWebsitePress(item.website!)}>
-                  <Text style={[styles.website, styles.clickableLink, { color: '#2563EB' }]}>{item.website}</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={[styles.website, { color: isDark ? '#fff' : colors.secondaryText }]}>Not provided</Text>
+          {/* Contact Information */}
+          <View style={styles.contactSection}>
+            <View style={styles.contactGrid}>
+              <View style={styles.contactItem}>
+                <Ionicons name="mail-outline" size={14} color="#6B7280" style={styles.contactIcon} />
+                <Text style={[styles.contactText, { color: isDark ? '#fff' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                  {item.email || 'Email not provided'}
+                </Text>
+              </View>
+              
+              <View style={styles.contactItem}>
+                <Ionicons name="call-outline" size={14} color="#6B7280" style={styles.contactIcon} />
+                <Text style={[styles.contactText, { color: isDark ? '#fff' : '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                  {item.mobile || 'Phone not provided'}
+                </Text>
+              </View>
+              
+              {item.website && (
+                <View style={styles.contactItem}>
+                  <Ionicons name="globe-outline" size={14} color="#6B7280" style={styles.contactIcon} />
+                  <TouchableOpacity onPress={() => handleWebsitePress(item.website!)}>
+                    <Text style={[styles.contactText, styles.websiteLink, { color: '#2563EB' }]} numberOfLines={1} ellipsizeMode="tail">
+                      {item.website}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </View>
 
-          <View style={styles.horizontalGreenLine} />
-
-          <View style={styles.bottomSection}>
-            <View style={styles.actionButtonsInline}>
-              <TouchableOpacity
-                onPress={handleWhatsApp}
-                style={styles.actionButtonNoBg}
-              >
-                <Ionicons name="logo-whatsapp" size={24} color="#25D366" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                onPress={handleCall}
-                style={styles.actionButtonNoBg}
-              >
-                <Ionicons name="call-outline" size={24} color="#2563EB" />
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                onPress={handleShare}
-                style={styles.actionButtonNoBg}
-              >
-                <Ionicons name="share-social-outline" size={24} color="#4B5563" />
-              </TouchableOpacity>
-            </View>
+          {/* Action Buttons */}
+          <View style={styles.actionSection}>
+            <TouchableOpacity onPress={handleWhatsApp} style={styles.actionButtonNoBg}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={handleCall} style={styles.actionButtonNoBg}>
+              <Ionicons name="call-outline" size={20} color="#2563EB" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={handleShare} style={styles.actionButtonNoBg}>
+              <Ionicons name="share-social-outline" size={20} color="#6B7280" />
+            </TouchableOpacity>
           </View>
         </View>
       </TouchableOpacity>
@@ -431,7 +436,6 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
   const [isSelectionMode, setIsSelectionMode] = useState(externalSelectionMode);
   const [selectedCards, setSelectedCards] = useState<Set<number>>(new Set());
   const cardRefs = useRef<Map<number, BusinessCardRef>>(new Map());
-  const multiCardShareRef = useRef<View>(null);
 
   // Sync with external selection mode
   useEffect(() => {
@@ -483,74 +487,92 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
     setSelectedCards(new Set());
   };
 
-  const shareSelectedCards = async () => {
+  const deleteSelectedCards = async () => {
     if (selectedCards.size === 0) {
-      Alert.alert('No Cards Selected', 'Please select at least one card to share.');
+      Alert.alert('No Cards Selected', 'Please select at least one card to move to trash.');
       return;
     }
 
-    try {
-      const cardsToShare = filteredCards.filter(card => selectedCards.has(card.id));
+    const selectedCardsArray = cards.filter(card => selectedCards.has(card.id));
+    const cardCount = selectedCardsArray.length;
+    
+    console.log('🗑️ Selected cards for deletion:', selectedCardsArray.map(c => ({ id: c.id, name: c.name })));
 
-      if (selectedCards.size === 1) {
-        // Single card - use existing individual card sharing
-        const cardRef = cardRefs.current.get(cardsToShare[0].id);
-        if (cardRef) {
-          const imageUri = await cardRef.captureCard();
-          
-          const isSharingAvailable = await Sharing.isAvailableAsync();
-          if (isSharingAvailable) {
-            await Sharing.shareAsync(imageUri, {
-              mimeType: 'image/png',
-              dialogTitle: `Share ${cardsToShare[0].name || 'Business Card'}`,
-            });
-          } else {
-            await Share.share({
-              url: imageUri,
-              title: `Business Card - ${cardsToShare[0].name || 'Contact'}`,
-            });
-          }
-        }
-      } else {
-        // Multiple cards - create combined image
-        if (!multiCardShareRef.current) {
-          Alert.alert('Error', 'Unable to create combined image. Please try again.');
-          return;
-        }
+    // Show confirmation dialog
+    Alert.alert(
+      'Move to Trash',
+      `Are you sure you want to move ${cardCount} business card${cardCount > 1 ? 's' : ''} to trash? You can restore them later.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Move to Trash',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ Starting deletion process for', cardCount, 'cards');
+              
+                             // Delete each selected card using the same soft delete logic as individual cards
+               const { deleteBusinessCard, restoreBusinessCard } = await import('../lib/api');
+               
+               for (const card of selectedCardsArray) {
+                 console.log(`🗑️ Soft deleting card: ${card.name} (ID: ${card.id})`);
+                 await deleteBusinessCard(card.id);
+                 
+                 // Call the onDelete callback to refresh the list
+                 if (onCardDelete) {
+                   onCardDelete(card.id);
+                 }
+               }
 
-        // Capture the combined view
-        const combinedImageUri = await captureRef(multiCardShareRef.current, {
-          format: 'png',
-          quality: 1.0,
-          result: 'tmpfile',
-        });
+                             // Show success message with restore option (same as individual card delete)
+               const message = cardCount === 1 
+                 ? `Business card moved to trash`
+                 : `${cardCount} business cards moved to trash`;
+               
+               showSnackbar(
+                 message,
+                 async () => {
+                   try {
+                     // Restore all deleted cards
+                     for (const card of selectedCardsArray) {
+                       console.log(`🔄 Restoring card: ${card.name} (ID: ${card.id})`);
+                       await restoreBusinessCard(card.id);
+                     }
+                     
+                     // Refresh the list after restore
+                     if (onCardDelete) {
+                       onCardDelete(-1); // Use -1 as a signal to refresh the entire list
+                     }
+                     
+                     console.log('✅ Successfully restored', cardCount, 'cards');
+                   } catch (error) {
+                     console.error('❌ Error restoring cards:', error);
+                     Alert.alert('Error', 'Failed to restore some business cards. Please try again.');
+                   }
+                 },
+                 'UNDO'
+               );
+               
+               console.log('✅ Successfully moved', cardCount, 'cards to trash');
 
-        // Share the combined image
-        const isSharingAvailable = await Sharing.isAvailableAsync();
-        if (isSharingAvailable) {
-          await Sharing.shareAsync(combinedImageUri, {
-            mimeType: 'image/png',
-            dialogTitle: `Share ${cardsToShare.length} Business Cards`,
-          });
-        } else {
-          await Share.share({
-            url: combinedImageUri,
-            title: `${cardsToShare.length} Business Cards`,
-          });
-        }
-      }
-
-      // Exit selection mode after sharing
-      const newSelectionMode = false;
-      setIsSelectionMode(newSelectionMode);
-      setSelectedCards(new Set());
-      if (onSelectionModeChange) {
-        onSelectionModeChange(newSelectionMode);
-      }
-    } catch (error) {
-      console.error('Error sharing selected cards:', error);
-      Alert.alert('Error', 'Failed to share selected cards. Please try again.');
-    }
+                             // Exit selection mode after deletion
+               const newSelectionMode = false;
+               setIsSelectionMode(newSelectionMode);
+               setSelectedCards(new Set());
+               if (onSelectionModeChange) {
+                 onSelectionModeChange(newSelectionMode);
+               }
+            } catch (error) {
+              console.error('❌ Error deleting selected cards:', error);
+              Alert.alert('Error', 'Failed to delete some cards. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
   
   const getFilteredAndSortedCards = () => {
@@ -615,8 +637,8 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
           </View>
           <View style={styles.selectionHeaderRight}>
             {selectedCards.size > 0 && (
-              <TouchableOpacity onPress={shareSelectedCards} style={styles.selectionButton}>
-                <Ionicons name="share-outline" size={24} color="#22C55E" />
+              <TouchableOpacity onPress={deleteSelectedCards} style={styles.selectionButton}>
+                <Ionicons name="trash-outline" size={24} color="#EF4444" />
               </TouchableOpacity>
             )}
             <TouchableOpacity 
@@ -665,13 +687,7 @@ const BusinessCardList: React.FC<BusinessCardListProps> = ({
         actionText={snackbarActionText}
       />
       
-      {/* Hidden MultiCardShareView for capturing combined images */}
-      <View style={styles.hiddenView}>
-        <MultiCardShareView
-          ref={multiCardShareRef}
-          cards={filteredCards.filter(card => selectedCards.has(card.id))}
-        />
-      </View>
+      {/* MultiCardShareView removed - now using multi-delete functionality */}
     </View>
   );
 };
@@ -717,12 +733,15 @@ const styles = StyleSheet.create({
   company: {
     fontSize: 10,
     color: '#4B5563',
-    marginBottom: 2,
+    flex: 1,
+    flexShrink: 1,
   },
   website: {
     fontSize: 10,
     color: '#4B5563',
     textDecorationLine: 'underline',
+    flex: 1,
+    flexShrink: 1,
   },
   clickableLink: {
     textDecorationLine: 'underline',
@@ -750,7 +769,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardContent: {
-    padding: 10,
+    padding: 12,
   },
   selectionIndicator: {
     position: 'absolute',
@@ -823,11 +842,14 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 10,
     color: '#4B5563',
-    marginBottom: 2,
+    flex: 1,
+    flexShrink: 1,
   },
   phone: {
     fontSize: 10,
     color: '#4B5563',
+    flex: 1,
+    flexShrink: 1,
   },
   highlightGreen: {
     color: '#22C55E',
@@ -895,11 +917,18 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
     alignItems: 'flex-start',
   },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    flexWrap: 'nowrap',
+  },
   contactLabel: {
     fontSize: 9,
     color: '#6B7280',
     fontWeight: '600',
-    marginBottom: 2,
+    minWidth: 50,
+    flexShrink: 0,
   },
   dateInline: {
     fontSize: 10,
@@ -943,12 +972,73 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     padding: 4,
   },
-  hiddenView: {
-    position: 'absolute',
-    top: -10000, // Move far off screen
-    left: -10000,
-    opacity: 0,
-    zIndex: -1,
+  // Removed multiCardView and hiddenView styles - no longer needed for multi-delete functionality
+  // Business Card Styles
+  businessCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  nameSection: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  businessCardName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 2,
+    lineHeight: 22,
+  },
+  businessCardTitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 1,
+    fontWeight: '500',
+  },
+  businessCardCompany: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  dateSection: {
+    alignItems: 'flex-end',
+  },
+  contactSection: {
+    marginBottom: 12,
+  },
+  contactGrid: {
+    gap: 6,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  contactIcon: {
+    marginRight: 8,
+    width: 16,
+  },
+  contactText: {
+    fontSize: 13,
+    color: '#374151',
+    flex: 1,
+  },
+  websiteLink: {
+    textDecorationLine: 'underline',
+  },
+  actionSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
   },
 });
 

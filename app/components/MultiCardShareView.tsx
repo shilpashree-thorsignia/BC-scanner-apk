@@ -7,17 +7,23 @@ import { captureRef } from 'react-native-view-shot';
 interface MultiCardShareViewProps {
   cards: BusinessCardType[];
   onCapture?: (uri: string) => void;
+  onReady?: () => void;
+  onLayout?: () => void;
 }
 
-const MultiCardShareView = React.forwardRef<View, MultiCardShareViewProps>(({ cards, onCapture }, ref) => {
+const MultiCardShareView = React.forwardRef<View, MultiCardShareViewProps>(({ cards, onCapture, onReady, onLayout }, ref) => {
   const { colors, isDark } = useTheme();
   const viewRef = useRef<View>(null);
-  const screenWidth = Dimensions.get('window').width;
   
-  // Calculate grid layout
-  const cardsPerRow = cards.length === 1 ? 1 : cards.length === 2 ? 2 : 2;
-  const cardWidth = (screenWidth - 60) / cardsPerRow; // 60 for padding and margins
+  console.log('🎨 MultiCardShareView rendering with', cards?.length || 0, 'cards:', cards?.map(c => ({ id: c.id, name: c.name })) || []);
+  
+  // Fixed dimensions for consistent capture
+  const containerWidth = 800;
+  const cardsPerRow = cards.length === 1 ? 1 : 2;
+  const cardWidth = (containerWidth - 80) / cardsPerRow; // 80 for padding and margins
   const cardHeight = cardWidth * 0.6; // Maintain aspect ratio
+  
+  console.log('📐 MultiCardShareView dimensions:', { containerWidth, cardsPerRow, cardWidth, cardHeight });
 
   const captureView = async () => {
     if (!viewRef.current) {
@@ -31,6 +37,16 @@ const MultiCardShareView = React.forwardRef<View, MultiCardShareViewProps>(({ ca
   };
 
   React.useImperativeHandle(ref, () => viewRef.current!, []);
+  
+  // Notify parent when component is ready
+  React.useEffect(() => {
+    if (cards && cards.length > 0 && onReady) {
+      const timer = setTimeout(() => {
+        onReady();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [cards, onReady]);
 
   const formatDate = (dateString: string) => {
     if (!dateString) return 'Date unknown';
@@ -46,60 +62,100 @@ const MultiCardShareView = React.forwardRef<View, MultiCardShareViewProps>(({ ca
     }
   };
 
-  const renderCard = (card: BusinessCardType, index: number) => (
-    <View key={card.id} style={[styles.card, { 
-      backgroundColor: colors.cardBackground, 
-      borderColor: colors.accent,
-      width: cardWidth,
-      height: cardHeight,
-      marginBottom: 16,
-      marginRight: index % cardsPerRow === cardsPerRow - 1 ? 0 : 16
-    }]}>
-      <View style={styles.cardContent}>
-        <View style={styles.topSection}>
-          <View style={styles.nameAndTitleSection}>
-            <Text style={[styles.name, { color: isDark ? '#fff' : colors.text }]} numberOfLines={1}>
+  const renderCard = (card: BusinessCardType, index: number) => {
+    console.log(`🃏 Rendering card ${index + 1}:`, { id: card.id, name: card.name });
+    return (
+      <View key={card.id} style={[styles.card, { 
+        backgroundColor: '#ffffff', 
+        borderColor: '#3B82F6',
+        width: cardWidth,
+        height: cardHeight,
+        marginBottom: 16,
+        marginRight: index % cardsPerRow === cardsPerRow - 1 ? 0 : 16
+      }]}>
+        <View style={styles.cardContent}>
+        {/* Business Card Header */}
+        <View style={styles.businessCardHeader}>
+          <View style={styles.nameSection}>
+            <Text style={[styles.businessCardName, { color: '#1F2937' }]} numberOfLines={1} ellipsizeMode="tail">
               {card.name || 'Not Provided'}
             </Text>
-            <Text style={[styles.jobTitle, { color: isDark ? '#fff' : colors.secondaryText }]}>
-              {card.job_title || 'Not provided'}
+            <Text style={[styles.businessCardTitle, { color: '#6B7280' }]} numberOfLines={1} ellipsizeMode="tail">
+              {card.job_title || 'Position not specified'}
+            </Text>
+            <Text style={[styles.businessCardCompany, { color: '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+              {card.company || 'Company not specified'}
             </Text>
           </View>
-          <Text style={[styles.date, { color: isDark ? '#fff' : colors.secondaryText }]}>
-            {formatDate(card.created_at)}
-          </Text>
+          <View style={styles.dateSection}>
+            <Text style={[styles.dateText, { color: '#9CA3AF' }]}>
+              {formatDate(card.created_at)}
+            </Text>
+          </View>
         </View>
 
-        <View style={styles.middleSection}>
-          <View style={styles.leftSection}>
-            <Text style={[styles.label, { color: isDark ? '#fff' : colors.secondaryText }]}>Email:</Text>
-            <Text style={[styles.value, { color: isDark ? '#fff' : colors.secondaryText }]} numberOfLines={1}>
-              {card.email || 'Not provided'}
-            </Text>
-            <Text style={[styles.label, { color: isDark ? '#fff' : colors.secondaryText }]}>Phone:</Text>
-            <Text style={[styles.value, { color: isDark ? '#fff' : colors.secondaryText }]}>
-              {card.mobile || 'Not provided'}
-            </Text>
-          </View>
-          <View style={styles.rightSection}>
-            <Text style={[styles.label, { color: isDark ? '#fff' : colors.secondaryText }]}>Company:</Text>
-            <Text style={[styles.value, { color: isDark ? '#fff' : colors.secondaryText }]} numberOfLines={1}>
-              {card.company || 'Not provided'}
-            </Text>
-            <Text style={[styles.label, { color: isDark ? '#fff' : colors.secondaryText }]}>Website:</Text>
-            <Text style={[styles.value, { color: '#2563EB' }]} numberOfLines={1}>
-              {card.website || 'Not provided'}
-            </Text>
+        {/* Contact Information */}
+        <View style={styles.contactSection}>
+          <View style={styles.contactGrid}>
+            <View style={styles.contactItem}>
+              <Text style={[styles.contactText, { color: '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                📧 {card.email || 'Email not provided'}
+              </Text>
+            </View>
+            
+            <View style={styles.contactItem}>
+              <Text style={[styles.contactText, { color: '#374151' }]} numberOfLines={1} ellipsizeMode="tail">
+                📞 {card.mobile || 'Phone not provided'}
+              </Text>
+            </View>
+            
+            {card.website && (
+              <View style={styles.contactItem}>
+                <Text style={[styles.contactText, styles.websiteLink, { color: '#2563EB' }]} numberOfLines={1} ellipsizeMode="tail">
+                  🌐 {card.website}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
     </View>
   );
+  };
+
+  if (!cards || cards.length === 0) {
+    console.log('❌ MultiCardShareView: No cards to render');
+    return (
+      <View ref={viewRef} style={[styles.container, { 
+        backgroundColor: colors.background,
+        width: containerWidth,
+        height: 200
+      }]}>
+        <View style={styles.header}>
+          <Text style={[styles.headerText, { color: isDark ? '#fff' : colors.text }]}>
+            No Cards Selected
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  const containerHeight = Math.ceil(cards.length / cardsPerRow) * (cardHeight + 40) + 100;
+  console.log('📏 Final container dimensions:', { width: containerWidth, height: containerHeight });
 
   return (
-    <View ref={viewRef} style={[styles.container, { backgroundColor: colors.background }]}>
+    <View 
+      ref={viewRef} 
+      style={[styles.container, { 
+        backgroundColor: '#ffffff',
+        width: containerWidth,
+        height: containerHeight,
+        minHeight: containerHeight
+      }]}
+      onLayout={onLayout}
+    >
       <View style={styles.header}>
-        <Text style={[styles.headerText, { color: isDark ? '#fff' : colors.text }]}>
+        <Text style={[styles.headerText, { color: '#1f2937' }]}>
           Business Cards ({cards.length})
         </Text>
       </View>
@@ -113,7 +169,10 @@ const MultiCardShareView = React.forwardRef<View, MultiCardShareViewProps>(({ ca
 const styles = StyleSheet.create({
   container: {
     padding: 20,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#ffffff',
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   header: {
     alignItems: 'center',
@@ -184,16 +243,83 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingLeft: 4,
   },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+    flexWrap: 'nowrap',
+  },
   label: {
     fontSize: 7,
     color: '#666',
     fontWeight: '600',
-    marginTop: 2,
+    minWidth: 35,
+    flexShrink: 0,
   },
   value: {
     fontSize: 8,
     color: '#4B5563',
-    marginBottom: 2,
+    flex: 1,
+    flexShrink: 1,
+  },
+  // Business Card Styles
+  businessCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  nameSection: {
+    flex: 1,
+    paddingRight: 6,
+  },
+  businessCardName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 1,
+    lineHeight: 13,
+  },
+  businessCardTitle: {
+    fontSize: 9,
+    color: '#6B7280',
+    marginBottom: 0.5,
+    fontWeight: '500',
+  },
+  businessCardCompany: {
+    fontSize: 8,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  dateSection: {
+    alignItems: 'flex-end',
+  },
+  dateText: {
+    fontSize: 7,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  contactSection: {
+    marginBottom: 6,
+  },
+  contactGrid: {
+    gap: 3,
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 1,
+  },
+  contactText: {
+    fontSize: 8,
+    color: '#374151',
+    flex: 1,
+  },
+  websiteLink: {
+    textDecorationLine: 'underline',
   },
 });
 
