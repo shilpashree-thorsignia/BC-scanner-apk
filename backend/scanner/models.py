@@ -75,6 +75,59 @@ class OTPVerification(models.Model):
         
         return otp
 
+class PasswordResetOTP(models.Model):
+    """Model to store OTP codes for password reset verification"""
+    email = models.EmailField()
+    otp_code = models.CharField(max_length=6)
+    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['email', 'otp_code']),
+            models.Index(fields=['expires_at']),
+        ]
+        verbose_name = "Password Reset OTP"
+        verbose_name_plural = "Password Reset OTPs"
+    
+    def __str__(self):
+        return f"Password Reset OTP for {self.email} - {'Used' if self.is_used else 'Active'}"
+    
+    def is_expired(self):
+        """Check if OTP has expired"""
+        return timezone.now() > self.expires_at
+    
+    def is_valid(self):
+        """Check if OTP is valid (not used and not expired)"""
+        return not self.is_used and not self.is_expired()
+    
+    @classmethod
+    def cleanup_expired(cls):
+        """Remove expired password reset OTP records"""
+        expired_count = cls.objects.filter(expires_at__lt=timezone.now()).delete()[0]
+        return expired_count
+    
+    @classmethod
+    def generate_otp(cls, email, expires_in_minutes=10):
+        """Generate a new OTP for password reset"""
+        import random
+        
+        # Generate 6-digit OTP
+        otp_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        
+        # Clean up any existing password reset OTPs for this email
+        cls.objects.filter(email=email).delete()
+        
+        # Create new password reset OTP
+        otp = cls.objects.create(
+            email=email,
+            otp_code=otp_code,
+            expires_at=timezone.now() + timedelta(minutes=expires_in_minutes)
+        )
+        
+        return otp
+
 class BusinessCard(models.Model):
     CARD_TYPE_CHOICES = [
         ('regular', 'Regular Business Card'),
@@ -252,4 +305,29 @@ class EmailConfig(models.Model):
 
     def __str__(self):
         status = "Enabled" if self.is_enabled else "Disabled"
-        return f"Email Config - {status} ({self.sender_email} → {self.recipient_email})" 
+        return f"Email Config - {status} ({self.sender_email} → {self.recipient_email})"
+
+    def get_connection_method(self):
+        """Return the SMTP connection method based on port"""
+        try:
+            port = int(self.smtp_port)
+            if port == 465:
+                return "SMTP_SSL (Direct SSL connection)"
+            elif port == 587:
+                return "SMTP + STARTTLS (TLS upgrade)"
+            else:
+                return f"SMTP (Port {port} - no encryption)"
+        except (ValueError, TypeError):
+            return "SMTP + STARTTLS (Default)"
+
+    def get_debug_info(self):
+        """Return debugging information for email configuration"""
+        return {
+            'smtp_host': self.smtp_host,
+            'smtp_port': self.smtp_port,
+            'connection_method': self.get_connection_method(),
+            'sender_email': self.sender_email,
+            'is_enabled': self.is_enabled,
+            'recommended_for_gmail': self.smtp_host == 'smtp.gmail.com' and self.smtp_port == '587',
+            'recommended_for_webmail': self.smtp_port == '465'
+        } 

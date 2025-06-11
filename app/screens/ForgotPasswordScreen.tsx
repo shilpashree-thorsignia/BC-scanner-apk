@@ -17,12 +17,13 @@ import {
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { getResponsiveData } from '../../constants/responsive';
+import { useAuth } from '../context/AuthContext';
 
 const ForgotPasswordScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
+  const { requestPasswordReset } = useAuth();
   const [dimensions, setDimensions] = useState(() => Dimensions.get('window'));
   
   // Update dimensions when screen size changes
@@ -56,29 +57,20 @@ const ForgotPasswordScreen: React.FC = () => {
     try {
       setLoading(true);
       
-      // TODO: Implement actual password reset API call
-      // For now, just simulate the process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Request password reset OTP
+      await requestPasswordReset(email);
       
-      setEmailSent(true);
-      Alert.alert(
-        'Reset Link Sent',
-        'We have sent a password reset link to your email address. Please check your email and follow the instructions.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.push('/screens/LoginScreen');
-            }
-          }
-        ]
-      );
+      // Navigate to OTP verification screen
+      router.push({
+        pathname: '/screens/ForgotPasswordOTPScreen',
+        params: { email: email }
+      });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Password reset error:', error);
       Alert.alert(
         'Error',
-        'There was an error sending the reset email. Please try again.'
+        error.message || 'There was an error sending the reset code. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -96,7 +88,11 @@ const ForgotPasswordScreen: React.FC = () => {
     >
       <StatusBar barStyle="light-content" backgroundColor="#8ac041" translucent />
       
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={[styles.mainContent, { width: '100%' }]}>
           {/* Header Section */}
           <View style={styles.headerSection}>
@@ -117,9 +113,14 @@ const ForgotPasswordScreen: React.FC = () => {
             style={styles.flex1}
           >
             <View style={[styles.formContainer, { maxWidth: contentMaxWidth }]}>
-              <Text style={styles.instructionText}>
-                Enter your email address and we'll send you a link to reset your password.
-              </Text>
+              {/* Info Section */}
+              <View style={styles.infoSection}>
+                <MaterialCommunityIcons name="lock-reset" size={48} color="#8ac041" />
+                <Text style={styles.infoTitle}>Reset Your Password</Text>
+                <Text style={styles.instructionText}>
+                  Enter your email address and we'll send you a verification code to reset your password.
+                </Text>
+              </View>
               
               <View style={styles.inputContainer}>
                 <TextInput
@@ -133,7 +134,7 @@ const ForgotPasswordScreen: React.FC = () => {
                 />
               </View>
 
-              {/* Reset Password Button */}
+              {/* Send Code Button */}
               <TouchableOpacity 
                 style={[styles.button, { 
                   width: buttonWidth,
@@ -146,7 +147,7 @@ const ForgotPasswordScreen: React.FC = () => {
                   <ActivityIndicator color="white" />
                 ) : (
                   <Text style={styles.buttonText}>
-                    Reset Password
+                    Send Verification Code
                   </Text>
                 )}
               </TouchableOpacity>
@@ -161,6 +162,14 @@ const ForgotPasswordScreen: React.FC = () => {
                     Login
                   </Text>
                 </TouchableOpacity>
+              </View>
+
+              {/* Security Note */}
+              <View style={styles.securityNote}>
+                <MaterialCommunityIcons name="shield-check" size={16} color="#8ac041" />
+                <Text style={styles.securityText}>
+                  We'll send a 6-digit verification code to your email for secure password reset
+                </Text>
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -177,23 +186,26 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    minHeight: '100%',
   },
   mainContent: {
     alignSelf: 'center',
     flex: 1,
+    minHeight: '100%',
   },
   flex1: {
     flex: 1,
   },
   headerSection: {
-    height: '35%',
+    height: 120,
     justifyContent: 'flex-end',
-    paddingBottom: 40,
+    paddingBottom: 20,
     position: 'relative',
+    paddingTop: 20,
   },
   backButton: {
     position: 'absolute',
-    top: 50,
+    top: 20,
     left: 20,
     zIndex: 1,
   },
@@ -207,20 +219,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    paddingTop: 40,
+    paddingTop: 30,
     paddingHorizontal: 24,
+    paddingBottom: 30,
     alignSelf: 'center',
     width: '100%',
+    minHeight: 500,
   },
   instructionText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 22,
+    marginBottom: 24,
+    lineHeight: 20,
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   input: {
     height: 50,
@@ -237,8 +251,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     alignSelf: 'center',
+    marginTop: 10,
   },
   buttonText: {
     color: 'white',
@@ -260,6 +275,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  infoSection: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  infoTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#8ac041',
+    marginTop: 12,
+    marginBottom: 12,
+  },
+  securityNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  securityText: {
+    color: '#666',
+    fontSize: 12,
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
 });
 

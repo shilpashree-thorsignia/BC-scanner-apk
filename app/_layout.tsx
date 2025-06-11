@@ -29,6 +29,7 @@ function AppLayout() {
       segments[1] === 'LoginScreen' ||
       segments[1] === 'SignupScreen' ||
       segments[1] === 'ForgotPasswordScreen' ||
+      segments[1] === 'ForgotPasswordOTPScreen' ||
       segments[1] === 'OTPVerificationScreen'
     );
 

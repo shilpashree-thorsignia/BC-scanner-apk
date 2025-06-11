@@ -19,6 +19,9 @@ interface AuthContextType {
   requestRegistration: (userData: SignUpData) => Promise<{ email: string; firstName: string }>;
   verifyOTP: (email: string, otpCode: string) => Promise<User>;
   resendOTP: (email: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<{ email: string }>;
+  verifyPasswordResetOTP: (email: string, otpCode: string, newPassword: string) => Promise<void>;
+  resendPasswordResetOTP: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   setUser: (user: User | null) => void;
 }
@@ -216,6 +219,92 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const requestPasswordReset = async (email: string) => {
+    try {
+      console.log('Requesting password reset...');
+      const response = await fetch(`${API_BASE_URL}/forgot-password/request/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.trim()
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Password reset request failed');
+      }
+
+      console.log('Password reset request successful:', data);
+      
+      return {
+        email: data.email
+      };
+    } catch (error) {
+      console.error('Password reset request error:', error);
+      throw error;
+    }
+  };
+
+  const verifyPasswordResetOTP = async (email: string, otpCode: string, newPassword: string) => {
+    try {
+      console.log('Verifying password reset OTP...');
+      const response = await fetch(`${API_BASE_URL}/forgot-password/verify/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          otp_code: otpCode,
+          new_password: newPassword
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Password reset verification failed');
+      }
+
+      console.log('Password reset successful:', data);
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Password reset verification error:', error);
+      throw error;
+    }
+  };
+
+  const resendPasswordResetOTP = async (email: string) => {
+    try {
+      console.log('Resending password reset OTP...');
+      const response = await fetch(`${API_BASE_URL}/forgot-password/resend/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resend password reset OTP');
+      }
+
+      console.log('Password reset OTP resent successfully');
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Resend password reset OTP error:', error);
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       console.log('Signing out user...');
@@ -246,6 +335,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       requestRegistration,
       verifyOTP,
       resendOTP,
+      requestPasswordReset,
+      verifyPasswordResetOTP,
+      resendPasswordResetOTP,
       signOut,
       setUser: setUserData 
     }}>

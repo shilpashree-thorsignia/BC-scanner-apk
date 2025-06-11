@@ -26,7 +26,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import BusinessCard, UserProfile, EmailConfig, OTPVerification
+from .models import BusinessCard, UserProfile, EmailConfig, OTPVerification, PasswordResetOTP
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
 
 # Load environment variables early
@@ -542,8 +542,9 @@ class UserLoginView(APIView):
         # Clean up expired OTP records on login attempt
         try:
             expired_count = OTPVerification.cleanup_expired()
-            if expired_count > 0:
-                print(f"🧹 Cleaned up {expired_count} expired OTP records")
+            expired_password_reset_count = PasswordResetOTP.cleanup_expired()
+            if expired_count > 0 or expired_password_reset_count > 0:
+                print(f"🧹 Cleaned up {expired_count} expired registration OTPs and {expired_password_reset_count} expired password reset OTPs")
         except Exception as e:
             print(f"⚠️ OTP cleanup error: {e}")
         
@@ -1560,56 +1561,82 @@ Business Card Scanner App""".format(
 
 
 class OTPEmailService:
-    """Service to handle OTP email sending for user registration verification"""
+    """
+    Dedicated service for sending OTP emails only.
+    Always uses knowledgeseeker238@gmail.com for OTP delivery.
+    """
     
     @staticmethod
     def send_otp_email(email, otp_code, first_name):
-        """Send OTP verification email to the user"""
+        """
+        Send OTP email using dedicated Gmail account for OTPs only.
+        This method always uses knowledgeseeker238@gmail.com regardless of EmailConfig.
+        """
         try:
-            subject = "🔐 Email Verification - Business Card Scanner"
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            from django.conf import settings
             
-            # Create HTML email content
+            # ALWAYS use dedicated Gmail account for OTPs
+            smtp_config = {
+                'smtp_host': 'smtp.gmail.com',
+                'smtp_port': 587,
+                'sender_email': 'knowledgeseeker238@gmail.com',
+                'sender_password': 'wfnkfipubofrbtnw'  # App password for knowledgeseeker238@gmail.com
+            }
+            
+            print(f"📧 [OTP] Sending OTP email TO: {email}")
+            print(f"📧 [OTP] From: {smtp_config['sender_email']}")
+            print(f"📧 [OTP] OTP Code: {otp_code}")
+            
+            subject = f"🔐 Your OTP Code: {otp_code}"
+            
+            # Create professional HTML message
             html_message = f"""
-            <!DOCTYPE html>
             <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Email Verification</title>
-            </head>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                        <h1 style="margin: 0 0 10px 0; font-size: 28px;">📧 Email Verification</h1>
-                        <p style="margin: 0; font-size: 16px;">Business Card Scanner App</p>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                    <h1 style="margin: 0; font-size: 28px;">🔐 Verification Required</h1>
+                    <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Business Card Scanner App</p>
+                </div>
+                
+                <div style="background: white; padding: 30px; border: 1px solid #e0e0e0; border-top: none;">
+                    <h2 style="color: #333; margin-top: 0;">Hello {first_name}! 👋</h2>
+                    
+                    <p style="font-size: 16px; margin-bottom: 25px;">
+                        Your verification code is ready. Please use the code below to complete your action:
+                    </p>
+                    
+                    <div style="background: #f8f9fa; border: 2px dashed #007bff; border-radius: 8px; padding: 25px; text-align: center; margin: 25px 0;">
+                        <div style="font-size: 32px; font-weight: bold; color: #007bff; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                            {otp_code}
+                        </div>
+                        <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
+                            ⏱️ This code expires in <strong>10 minutes</strong>
+                        </p>
                     </div>
-                    <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
-                        <h2 style="color: #333; margin-top: 0;">Hi {first_name}! 👋</h2>
-                        <p style="color: #555; line-height: 1.6;">Thank you for registering with our Business Card Scanner app! To complete your registration, please verify your email address using the OTP code below:</p>
-                        
-                        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 25px; text-align: center; margin: 25px 0;">
-                            <p style="margin: 0 0 10px 0; font-size: 16px; color: #666;">Your Verification Code:</p>
-                            <div style="font-size: 36px; font-weight: bold; color: #667eea; letter-spacing: 8px; font-family: 'Courier New', Consolas, monospace; margin: 10px 0;">{otp_code}</div>
-                        </div>
-                        
-                        <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                            <strong style="color: #856404;">⏰ Important:</strong> <span style="color: #856404;">This verification code will expire in <strong>10 minutes</strong>. Please enter it in the app to complete your registration.</span>
-                        </div>
-                        
-                        <p style="color: #333; font-weight: bold; margin: 20px 0 10px 0;">What's next?</p>
-                        <ul style="color: #555; line-height: 1.6; padding-left: 20px;">
-                            <li>Enter this 6-digit code in the verification screen</li>
-                            <li>Complete your account setup</li>
-                            <li>Start scanning business cards instantly!</li>
+                    
+                    <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                        <h4 style="margin: 0 0 10px 0; color: #856404;">🛡️ Security Notice:</h4>
+                        <ul style="margin: 0; padding-left: 20px; color: #856404;">
+                            <li>Never share this code with anyone</li>
+                            <li>Our team will never ask for your OTP</li>
+                            <li>If you didn't request this, please ignore this email</li>
                         </ul>
-                        
-                        <p style="color: #777; font-size: 14px; margin-top: 25px;">If you didn't create an account with us, please ignore this email.</p>
-                        
-                        <div style="text-align: center; margin-top: 30px; color: #6c757d; font-size: 14px; border-top: 1px solid #dee2e6; padding-top: 20px;">
-                            <p style="margin: 5px 0;"><strong>📱 Business Card Scanner App</strong></p>
-                            <p style="margin: 5px 0;">This is an automated message, please do not reply.</p>
-                        </div>
                     </div>
+                    
+                    <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                        This is an automated message from Business Card Scanner App.<br>
+                        <strong>OTP Service:</strong> knowledgeseeker238@gmail.com
+                    </p>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 10px 10px; text-align: center; border: 1px solid #e0e0e0; border-top: none;">
+                    <p style="margin: 0; color: #666; font-size: 12px;">
+                        📧 OTP delivery powered by Gmail SMTP<br>
+                        🕐 Sent at: {OTPEmailService._get_formatted_datetime()}
+                    </p>
                 </div>
             </body>
             </html>
@@ -1617,75 +1644,262 @@ class OTPEmailService:
             
             # Plain text version
             text_message = f"""
-🔐 Email Verification - Business Card Scanner
-
-Hi {first_name}!
-
-Thank you for registering with our Business Card Scanner app!
-
-Your verification code is: {otp_code}
-
-⏰ This code will expire in 10 minutes.
-
-Please enter this code in the app to complete your registration.
-
-If you didn't create an account with us, please ignore this email.
-
-📱 Business Card Scanner App
+            🔐 VERIFICATION CODE
+            
+            Hello {first_name}!
+            
+            Your verification code: {otp_code}
+            
+            ⏱️ This code expires in 10 minutes.
+            
+            🛡️ Security Notice:
+            - Never share this code with anyone
+            - Our team will never ask for your OTP
+            - If you didn't request this, please ignore this email
+            
+            This is an automated message from Business Card Scanner App.
+            OTP Service: knowledgeseeker238@gmail.com
             """
             
-            # Try to get email configuration
-            try:
-                email_config = EmailConfig.objects.first()
-                if email_config and email_config.is_enabled:
-                    # Use configured email settings
-                    result = EmailService.send_email(
-                        config=email_config,
-                        subject=subject,
-                        message=html_message,
-                        recipient_email=email
-                    )
-                    return result
-                else:
-                    # Fallback to Django default email settings
-                    send_mail(
-                        subject=subject,
-                        message=text_message,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[email],
-                        html_message=html_message,
-                        fail_silently=False,
-                    )
-                    return {
-                        'success': True,
-                        'message': f'OTP email sent successfully to {email}'
-                    }
-                    
-            except Exception as e:
-                logging.error(f"Failed to send OTP email: {e}")
-                return {
-                    'success': False,
-                    'message': f'Failed to send OTP email: {str(e)}'
-                }
-                
-        except Exception as e:
-            logging.error(f"OTP email service error: {e}")
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['From'] = f"Business Card Scanner <{smtp_config['sender_email']}>"
+            msg['To'] = email
+            msg['Subject'] = subject
+            
+            # Add both plain text and HTML versions
+            text_part = MIMEText(text_message, 'plain')
+            html_part = MIMEText(html_message, 'html')
+            msg.attach(text_part)
+            msg.attach(html_part)
+            
+            # Connect and send using Gmail SMTP
+            print(f"🔧 [OTP] Connecting to SMTP: {smtp_config['smtp_host']}:{smtp_config['smtp_port']}")
+            
+            with smtplib.SMTP(smtp_config['smtp_host'], smtp_config['smtp_port'], timeout=30) as server:
+                server.starttls()  # Enable TLS for Gmail
+                server.login(smtp_config['sender_email'], smtp_config['sender_password'])
+                server.send_message(msg)
+            
+            success_message = f'OTP email sent successfully to {email}'
+            print(f"✅ [OTP] {success_message}")
+            
+            return {
+                'success': True,
+                'message': success_message
+            }
+            
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"OTP Email Authentication failed: {str(e)}"
+            print(f"❌ [OTP] {error_msg}")
             return {
                 'success': False,
-                'message': f'Email service error: {str(e)}'
+                'message': error_msg
             }
+        except smtplib.SMTPConnectError as e:
+            error_msg = f"Cannot connect to Gmail SMTP server: {str(e)}"
+            print(f"❌ [OTP] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except Exception as e:
+            error_msg = f"Failed to send OTP email: {str(e)}"
+            print(f"❌ [OTP] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+    
+    @staticmethod
+    def _get_formatted_datetime():
+        """Get formatted datetime for email footer"""
+        from datetime import datetime
+        import pytz
+        
+        # Get current time in UTC
+        utc_now = datetime.now(pytz.UTC)
+        
+        # Format as readable string
+        return utc_now.strftime('%Y-%m-%d %H:%M:%S UTC')
+
+
+class PasswordResetOTPEmailService:
+    """
+    Dedicated service for sending password reset OTP emails only.
+    Always uses knowledgeseeker238@gmail.com for OTP delivery.
+    """
+    
+    @staticmethod
+    def send_password_reset_otp_email(email, otp_code, first_name):
+        """
+        Send password reset OTP email using dedicated Gmail account.
+        This method always uses knowledgeseeker238@gmail.com regardless of EmailConfig.
+        """
+        try:
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            from django.conf import settings
+            
+            # ALWAYS use dedicated Gmail account for OTPs
+            smtp_config = {
+                'smtp_host': 'smtp.gmail.com',
+                'smtp_port': 587,
+                'sender_email': 'knowledgeseeker238@gmail.com',
+                'sender_password': 'wfnkfipubofrbtnw'  # App password for knowledgeseeker238@gmail.com
+            }
+            
+            print(f"📧 [PASSWORD RESET OTP] Sending OTP email TO: {email}")
+            print(f"📧 [PASSWORD RESET OTP] From: {smtp_config['sender_email']}")
+            print(f"📧 [PASSWORD RESET OTP] OTP Code: {otp_code}")
+            
+            subject = f"🔒 Password Reset Code: {otp_code}"
+            
+            # Create professional HTML message for password reset
+            html_message = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+                    <h1 style="margin: 0; font-size: 28px;">🔒 Password Reset</h1>
+                    <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Business Card Scanner App</p>
+                </div>
+                
+                <div style="background: white; padding: 30px; border: 1px solid #e0e0e0; border-top: none;">
+                    <h2 style="color: #333; margin-top: 0;">Hello {first_name}! 👋</h2>
+                    
+                    <p style="font-size: 16px; margin-bottom: 25px;">
+                        You requested to reset your password. Please use the verification code below to continue:
+                    </p>
+                    
+                    <div style="background: #f8f9fa; border: 2px dashed #ff6b6b; border-radius: 8px; padding: 25px; text-align: center; margin: 25px 0;">
+                        <div style="font-size: 32px; font-weight: bold; color: #ff6b6b; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+                            {otp_code}
+                        </div>
+                        <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
+                            ⏱️ This code expires in <strong>10 minutes</strong>
+                        </p>
+                    </div>
+                    
+                    <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                        <h4 style="margin: 0 0 10px 0; color: #721c24;">🛡️ Security Notice:</h4>
+                        <ul style="margin: 0; padding-left: 20px; color: #721c24;">
+                            <li>Only use this code if you requested a password reset</li>
+                            <li>Never share this code with anyone</li>
+                            <li>If you didn't request this, please ignore this email and secure your account</li>
+                        </ul>
+                    </div>
+                    
+                    <p style="color: #666; font-size: 14px; margin-top: 30px;">
+                        This is an automated message from Business Card Scanner App.<br>
+                        <strong>OTP Service:</strong> knowledgeseeker238@gmail.com
+                    </p>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 0 0 10px 10px; text-align: center; border: 1px solid #e0e0e0; border-top: none;">
+                    <p style="margin: 0; color: #666; font-size: 12px;">
+                        📧 OTP delivery powered by Gmail SMTP<br>
+                        🕐 Sent at: {PasswordResetOTPEmailService._get_formatted_datetime()}
+                    </p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Plain text version
+            text_message = f"""
+            🔒 PASSWORD RESET CODE
+            
+            Hello {first_name}!
+            
+            You requested to reset your password.
+            Your verification code: {otp_code}
+            
+            ⏱️ This code expires in 10 minutes.
+            
+            🛡️ Security Notice:
+            - Only use this code if you requested a password reset
+            - Never share this code with anyone
+            - If you didn't request this, please ignore this email and secure your account
+            
+            This is an automated message from Business Card Scanner App.
+            OTP Service: knowledgeseeker238@gmail.com
+            """
+            
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['From'] = f"Business Card Scanner <{smtp_config['sender_email']}>"
+            msg['To'] = email
+            msg['Subject'] = subject
+            
+            # Add both plain text and HTML versions
+            text_part = MIMEText(text_message, 'plain')
+            html_part = MIMEText(html_message, 'html')
+            msg.attach(text_part)
+            msg.attach(html_part)
+            
+            # Connect and send using Gmail SMTP
+            print(f"🔧 [PASSWORD RESET OTP] Connecting to SMTP: {smtp_config['smtp_host']}:{smtp_config['smtp_port']}")
+            
+            with smtplib.SMTP(smtp_config['smtp_host'], smtp_config['smtp_port'], timeout=30) as server:
+                server.starttls()  # Enable TLS for Gmail
+                server.login(smtp_config['sender_email'], smtp_config['sender_password'])
+                server.send_message(msg)
+            
+            success_message = f'Password reset OTP email sent successfully to {email}'
+            print(f"✅ [PASSWORD RESET OTP] {success_message}")
+            
+            return {
+                'success': True,
+                'message': success_message
+            }
+            
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"Password reset OTP Email Authentication failed: {str(e)}"
+            print(f"❌ [PASSWORD RESET OTP] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except smtplib.SMTPConnectError as e:
+            error_msg = f"Cannot connect to Gmail SMTP server for password reset: {str(e)}"
+            print(f"❌ [PASSWORD RESET OTP] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except Exception as e:
+            error_msg = f"Failed to send password reset OTP email: {str(e)}"
+            print(f"❌ [PASSWORD RESET OTP] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+    
+    @staticmethod
+    def _get_formatted_datetime():
+        """Get formatted datetime for email footer"""
+        from datetime import datetime
+        import pytz
+        
+        # Get current time in UTC
+        utc_now = datetime.now(pytz.UTC)
+        
+        # Format as readable string
+        return utc_now.strftime('%Y-%m-%d %H:%M:%S UTC')
 
 
 class EmailService:
     """
-    Service class for sending emails with automated follow-up functionality.
-    Supports business card owner notification emails.
+    Service class for sending business card notification emails.
+    Uses user-configured email settings from EmailConfig model.
+    This is separate from OTP emails which always use knowledgeseeker238@gmail.com.
     """
     
     @staticmethod
     def send_email(config, subject, message, recipient_email=None, business_card=None):
         """
-        Send email using provided configuration
+        Send email using provided EmailConfig for business card notifications.
         
         Args:
             config: EmailConfig object with SMTP settings
@@ -1708,9 +1922,9 @@ class EmailService:
             else:
                 to_email = config.recipient_email
             
-            print(f"📧 Sending email TO: {to_email}")
-            print(f"📧 From: {config.sender_email}")
-            print(f"📧 Subject: {subject}")
+            print(f"📧 [BUSINESS EMAIL] Sending email TO: {to_email}")
+            print(f"📧 [BUSINESS EMAIL] From: {config.sender_email}")
+            print(f"📧 [BUSINESS EMAIL] Subject: {subject}")
             
             # Create message
             msg = MIMEMultipart('alternative')
@@ -1767,15 +1981,24 @@ class EmailService:
             except (ValueError, TypeError):
                 smtp_port = 587
             
-            print(f"🔧 Connecting to SMTP: {config.smtp_host}:{smtp_port}")
+            print(f"🔧 [BUSINESS EMAIL] Connecting to SMTP: {config.smtp_host}:{smtp_port}")
             
-            with smtplib.SMTP(config.smtp_host, smtp_port) as server:
-                server.starttls()
-                server.login(config.sender_email, config.sender_password)
-                server.send_message(msg)
+            # Different connection methods for different ports
+            if smtp_port == 465:
+                # Port 465 requires SSL from the start (webmail/SSL)
+                with smtplib.SMTP_SSL(config.smtp_host, smtp_port, timeout=30) as server:
+                    server.login(config.sender_email, config.sender_password)
+                    server.send_message(msg)
+            else:
+                # Port 587 and others use TLS upgrade (Gmail/TLS)
+                with smtplib.SMTP(config.smtp_host, smtp_port, timeout=30) as server:
+                    if smtp_port == 587:
+                        server.starttls()  # Enable TLS for port 587
+                    server.login(config.sender_email, config.sender_password)
+                    server.send_message(msg)
             
-            success_message = f'Email sent successfully to {to_email}'
-            print(f"✅ {success_message}")
+            success_message = f'Business email sent successfully to {to_email}'
+            print(f"✅ [BUSINESS EMAIL] {success_message}")
             
             return {
                 'success': True,
@@ -1783,22 +2006,50 @@ class EmailService:
             }
             
         except smtplib.SMTPAuthenticationError as e:
-            error_msg = f"SMTP Authentication failed. Please check your email and app password: {str(e)}"
-            print(f"❌ {error_msg}")
+            error_msg = f"Business Email Authentication failed. Please check your email and app password: {str(e)}"
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except smtplib.SMTPConnectError as e:
+            error_msg = f"Cannot connect to SMTP server {config.smtp_host}:{config.smtp_port}. Server may be down or unreachable: {str(e)}"
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except smtplib.SMTPServerDisconnected as e:
+            error_msg = f"SMTP server disconnected unexpectedly: {str(e)}"
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
             }
         except smtplib.SMTPException as e:
             error_msg = f"SMTP error occurred: {str(e)}"
-            print(f"❌ {error_msg}")
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except ConnectionRefusedError as e:
+            error_msg = f"Connection refused by {config.smtp_host}:{config.smtp_port}. Check if server is running and port is correct: {str(e)}"
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except TimeoutError as e:
+            error_msg = f"Connection timeout to {config.smtp_host}:{config.smtp_port}. Server may be slow or unreachable: {str(e)}"
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
             }
         except Exception as e:
-            error_msg = f"Failed to send email: {str(e)}"
-            print(f"❌ {error_msg}")
+            error_msg = f"Failed to send business email: {str(e)}"
+            print(f"❌ [BUSINESS EMAIL] {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
@@ -1828,7 +2079,14 @@ class EmailService:
     @staticmethod
     def _get_formatted_datetime():
         """Get formatted current datetime"""
-        return timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+        from datetime import datetime
+        import pytz
+        
+        # Get current time in UTC
+        utc_now = datetime.now(pytz.UTC)
+        
+        # Format as readable string
+        return utc_now.strftime('%Y-%m-%d %H:%M:%S UTC')
 
     @staticmethod
     def send_business_card_notification(business_card):
@@ -1886,3 +2144,229 @@ If you received this in error, please disregard this message."""
             
         except Exception as e:
             return {'success': False, 'message': f'Error sending follow-up email: {str(e)}'} 
+
+
+class ForgotPasswordRequestView(APIView):
+    """First step: Request password reset and send OTP"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        try:
+            print(f"🔐 Password reset request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
+            
+            email = request.data.get('email', '').strip().lower()
+            
+            if not email:
+                return Response({
+                    'error': 'Email is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if user exists
+            try:
+                user = UserProfile.objects.get(email=email)
+            except UserProfile.DoesNotExist:
+                # For security, don't reveal if email exists or not
+                return Response({
+                    'message': 'If this email is registered, you will receive a password reset code.',
+                    'email': email,
+                    'expires_in_minutes': 10
+                }, status=status.HTTP_200_OK)
+            
+            # Check if user's email is verified
+            if not user.is_verified:
+                return Response({
+                    'error': 'Email not verified. Please verify your email first before requesting password reset.',
+                    'email_verified': False
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Generate password reset OTP
+            otp_record = PasswordResetOTP.generate_otp(email=email)
+            
+            # Send password reset OTP email using dedicated Gmail account
+            email_result = PasswordResetOTPEmailService.send_password_reset_otp_email(
+                email, otp_record.otp_code, user.first_name
+            )
+            
+            if email_result['success']:
+                print(f"✅ Password reset OTP email sent successfully to {email}")
+                return Response({
+                    'message': 'Password reset verification code sent to your email.',
+                    'email': email,
+                    'expires_in_minutes': 10
+                }, status=status.HTTP_200_OK)
+            else:
+                # Clean up OTP record if email failed
+                otp_record.delete()
+                print(f"❌ Failed to send password reset OTP email: {email_result['message']}")
+                return Response({
+                    'error': f'Failed to send password reset email: {email_result["message"]}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            print(f"❌ Password reset request error: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ForgotPasswordVerifyView(APIView):
+    """Second step: Verify OTP for password reset"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        try:
+            print(f"🔐 Password reset OTP verification request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
+            
+            email = request.data.get('email', '').strip().lower()
+            otp_code = request.data.get('otp_code', '').strip()
+            new_password = request.data.get('new_password', '')
+            
+            if not email or not otp_code or not new_password:
+                return Response({
+                    'error': 'Email, OTP code, and new password are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate password length
+            if len(new_password) < 6:
+                return Response({
+                    'error': 'Password must be at least 6 characters long'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find and validate password reset OTP
+            try:
+                otp_record = PasswordResetOTP.objects.get(email=email, otp_code=otp_code)
+            except PasswordResetOTP.DoesNotExist:
+                print(f"❌ Invalid password reset OTP for {email}")
+                return Response({
+                    'error': 'Invalid verification code'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if OTP is still valid
+            if otp_record.is_expired():
+                otp_record.delete()
+                return Response({
+                    'error': 'Verification code has expired. Please request a new one.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if OTP is already used
+            if otp_record.is_used:
+                print(f"🚫 Already used password reset OTP for {email}")
+                return Response({
+                    'error': 'Verification code has already been used'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find the user and update password
+            try:
+                user = UserProfile.objects.get(email=email)
+            except UserProfile.DoesNotExist:
+                otp_record.delete()
+                return Response({
+                    'error': 'User not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Update user password
+            user.password = make_password(new_password)
+            user.save()
+            
+            # Mark OTP as used and delete it
+            otp_record.is_used = True
+            otp_record.save()
+            otp_record.delete()  # Clean up after successful password reset
+            
+            print(f"✅ Password reset completed successfully for: {user.email}")
+            
+            return Response({
+                'message': 'Password reset successful! You can now login with your new password.',
+                'email': user.email
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            print(f"❌ Password reset verification error: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ForgotPasswordResendOTPView(APIView):
+    """Resend OTP for password reset verification"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        try:
+            print(f"🔄 Password reset OTP resend request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
+            
+            email = request.data.get('email', '').strip().lower()
+            
+            if not email:
+                return Response({
+                    'error': 'Email is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if user exists
+            try:
+                user = UserProfile.objects.get(email=email)
+            except UserProfile.DoesNotExist:
+                # For security, don't reveal if email exists or not
+                return Response({
+                    'message': 'If this email is registered, you will receive a new password reset code.',
+                    'email': email,
+                    'expires_in_minutes': 10
+                }, status=status.HTTP_200_OK)
+            
+            # Find existing password reset OTP record
+            try:
+                otp_record = PasswordResetOTP.objects.filter(email=email, is_used=False).latest('created_at')
+            except PasswordResetOTP.DoesNotExist:
+                return Response({
+                    'error': 'No pending password reset found for this email. Please start the password reset process again.'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if the OTP is still valid (not too old)
+            if otp_record.is_expired():
+                otp_record.delete()
+                return Response({
+                    'error': 'Password reset session has expired. Please start the password reset process again.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Delete the old OTP record and create a new one
+            otp_record.delete()
+            
+            # Generate new password reset OTP
+            new_otp_record = PasswordResetOTP.generate_otp(email=email)
+            
+            # Send new password reset OTP email using dedicated Gmail account
+            email_result = PasswordResetOTPEmailService.send_password_reset_otp_email(
+                email, new_otp_record.otp_code, user.first_name
+            )
+            
+            if email_result['success']:
+                print(f"✅ Password reset OTP resent successfully to {email}")
+                return Response({
+                    'message': 'New password reset verification code sent to your email.',
+                    'email': email,
+                    'expires_in_minutes': 10
+                }, status=status.HTTP_200_OK)
+            else:
+                # Clean up new OTP record if email failed
+                new_otp_record.delete()
+                print(f"❌ Failed to resend password reset OTP email: {email_result['message']}")
+                return Response({
+                    'error': f'Failed to send password reset email: {email_result["message"]}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            print(f"❌ Password reset OTP resend error: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserDetailView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request, user_id, format=None):
+        try:
+            user = UserProfile.objects.get(id=user_id)
+            return Response({
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone': user.phone
+            })
+        except UserProfile.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)

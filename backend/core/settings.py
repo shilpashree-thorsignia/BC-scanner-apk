@@ -120,28 +120,30 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Email Configuration - Fallback when no EmailConfig exists
-# These settings will be used when no EmailConfig is configured in the database
+# Email Configuration - Used ONLY for OTP emails (registration and password reset)
+# Business card notifications use the EmailConfig model in the database
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
-# Gmail SMTP Configuration (you can change to other providers)
+# Gmail SMTP Configuration for OTP emails only
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() == 'true'
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() == 'true'
 
-# Default sender email credentials - using knowledgeseeker238@gmail.com for OTP emails
+# OTP email sender credentials - knowledgeseeker238@gmail.com used ONLY for OTPs
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'knowledgeseeker238@gmail.com')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'wfnkfipubofrbtnw')
 
-# Default FROM email address for OTP emails
+# Default FROM email address for OTP emails only
+# Business card notifications use the sender_email from EmailConfig model
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Business Card Scanner <knowledgeseeker238@gmail.com>')
 
 # Email timeout (in seconds)
 EMAIL_TIMEOUT = 60
 
 # Print email configuration status
-print(f"📧 Email Host: {EMAIL_HOST}:{EMAIL_PORT}")
-print(f"📧 Email User: {EMAIL_HOST_USER}")
-print(f"📧 Default From: {DEFAULT_FROM_EMAIL}")
-print(f"📧 TLS: {EMAIL_USE_TLS}, SSL: {EMAIL_USE_SSL}") 
+print(f"📧 OTP Email Host: {EMAIL_HOST}:{EMAIL_PORT}")
+print(f"📧 OTP Email User: {EMAIL_HOST_USER}")
+print(f"📧 OTP Default From: {DEFAULT_FROM_EMAIL}")
+print(f"📧 TLS: {EMAIL_USE_TLS}, SSL: {EMAIL_USE_SSL}")
+print(f"📧 Note: This config is for OTP emails only. Business notifications use EmailConfig model.") 
