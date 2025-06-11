@@ -16,8 +16,8 @@ import { router } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 
 const SignUpScreen = () => {
-  const { signUp } = useAuth();
-    const [formData, setFormData] = useState({
+  const { requestRegistration } = useAuth();
+  const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
@@ -39,12 +39,17 @@ const SignUpScreen = () => {
       return;
     }
 
+    if (formData.password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
     try {
       setLoading(true);
-      console.log('Sending signup request...');
+      console.log('Requesting registration with OTP...');
       
-      // Use the AuthContext signUp function instead of direct API call
-      const result = await signUp({
+      // Step 1: Request registration (sends OTP email)
+      const result = await requestRegistration({
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
@@ -52,32 +57,41 @@ const SignUpScreen = () => {
         password: formData.password
       });
 
-      console.log('Signup successful:', result);
+      console.log('Registration request successful:', result);
       
-      // Show success message and navigate back to login
+      // Show success message and navigate to OTP verification
       Alert.alert(
-        'Success',
-        'Registration successful!',
+        'Check Your Email! 📧',
+        `We've sent a verification code to ${formData.email}. Please enter the 6-digit code to complete your registration.`,
         [
           {
-            text: 'OK',
-            onPress: () => router.push('/screens/LoginScreen')
+            text: 'Continue',
+            onPress: () => {
+              // Navigate to OTP verification screen with email and firstName
+              router.push({
+                pathname: '/screens/OTPVerificationScreen',
+                params: {
+                  email: result.email,
+                  firstName: result.firstName
+                }
+              });
+            }
           }
         ]
       );
     } catch (error: any) {
-      console.error('Registration error:', error);
-      let errorMessage = 'There was an error creating your account. Please try again.';
+      console.error('Registration request error:', error);
+      let errorMessage = 'There was an error starting your registration. Please try again.';
       
       if (error.message) {
-        if (error.message.includes('Duplicate entry') && error.message.includes('email')) {
+        if (error.message.includes('already exists') || error.message.includes('already registered')) {
           errorMessage = 'This email is already registered. Please use a different email or sign in.';
         } else {
           errorMessage = error.message;
         }
       }
       
-      Alert.alert('Sign Up Failed', errorMessage);
+      Alert.alert('Registration Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -100,6 +114,13 @@ const SignUpScreen = () => {
         </View>
 
         <View style={styles.formContainer}>
+          <View style={styles.infoContainer}>
+            <Text style={styles.infoTitle}>Create Your Account</Text>
+            <Text style={styles.infoSubtitle}>
+              We'll send a verification code to your email to confirm your account
+            </Text>
+          </View>
+
           <TextInput
             style={styles.input}
             placeholder="First Name"
@@ -128,7 +149,7 @@ const SignUpScreen = () => {
 
           <TextInput
             style={styles.input}
-            placeholder="Phone no"
+            placeholder="Phone no (optional)"
             value={formData.phone}
             onChangeText={(text) => setFormData({ ...formData, phone: text })}
             keyboardType="phone-pad"
@@ -138,7 +159,7 @@ const SignUpScreen = () => {
           <View style={styles.passwordContainer}>
             <TextInput
               style={styles.passwordInput}
-              placeholder="Password"
+              placeholder="Password (min. 6 characters)"
               value={formData.password}
               onChangeText={(text) => setFormData({ ...formData, password: text })}
               secureTextEntry={!showPassword}
@@ -168,13 +189,20 @@ const SignUpScreen = () => {
             disabled={loading}
           >
             <Text style={styles.signUpButtonText}>
-              {loading ? 'Signing Up...' : 'Sign Up'}
+              {loading ? 'Sending Verification Code...' : 'Send Verification Code'}
             </Text>
           </TouchableOpacity>
 
+          <View style={styles.securityNote}>
+            <Ionicons name="shield-checkmark-outline" size={16} color="#8ac041" />
+            <Text style={styles.securityText}>
+              Your email will be verified before account creation
+            </Text>
+          </View>
+
           <View style={styles.dividerContainer}>
             <View style={styles.divider} />
-            <Text style={styles.dividerText}>Or Log In With</Text>
+            <Text style={styles.dividerText}>Or Sign Up With</Text>
             <View style={styles.divider} />
           </View>
 
@@ -244,6 +272,22 @@ const styles = StyleSheet.create({
     padding: 24,
     marginTop: 16,
   },
+  infoContainer: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  infoTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  infoSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   input: {
     height: 48,
     borderWidth: 1,
@@ -284,7 +328,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   signUpButtonDisabled: {
     opacity: 0.7,
@@ -293,6 +337,18 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  securityNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  securityText: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginLeft: 6,
   },
   dividerContainer: {
     flexDirection: 'row',

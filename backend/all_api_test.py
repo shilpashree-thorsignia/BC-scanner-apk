@@ -234,3 +234,8 @@ class EmailConfigSerializer(serializers.ModelSerializer):
                         'sender_password': 'Sender password is required when email automation is enabled'
                     })
         return attrs
+    
+    # https://github.com/SreeKumarSeven/BC-scanner-app.git
+    # GOOGLE_GEMINI_API_KEY=AIzaSyCMvRQsbvP3O51jB3evexSbkxRZS4v2Fno
+    # DATABASE_URL=postgresql://postgres:byTrvIfBhecjaxwLJETiQSqeHkVDZgOS@switchback.proxy.rlwy.net:55041/railway
+    # DEBUG=True

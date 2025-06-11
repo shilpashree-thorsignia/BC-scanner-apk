@@ -16,7 +16,9 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (userData: SignUpData) => Promise<User>;
+  requestRegistration: (userData: SignUpData) => Promise<{ email: string; firstName: string }>;
+  verifyOTP: (email: string, otpCode: string) => Promise<User>;
+  resendOTP: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   setUser: (user: User | null) => void;
 }
@@ -113,9 +115,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (userData: SignUpData) => {
+  const requestRegistration = async (userData: SignUpData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/register/`, {
+      console.log('Requesting registration with OTP...');
+      const response = await fetch(`${API_BASE_URL}/register/request/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,13 +135,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Sign up failed');
+        throw new Error(data.error || 'Registration request failed');
       }
 
-      // Return the created user data
-      return data;
+      console.log('Registration request successful:', data);
+      
+      // Return email and firstName for OTP verification screen
+      return {
+        email: data.email,
+        firstName: userData.firstName
+      };
     } catch (error) {
-      console.error('Sign up error:', error);
+      console.error('Registration request error:', error);
+      throw error;
+    }
+  };
+
+  const verifyOTP = async (email: string, otpCode: string) => {
+    try {
+      console.log('Verifying OTP...');
+      const response = await fetch(`${API_BASE_URL}/register/verify/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          otp_code: otpCode
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'OTP verification failed');
+      }
+
+      console.log('OTP verification successful:', data);
+
+      // Create user object from verified registration
+      const userData: User = {
+        id: data.id.toString(),
+        firstName: data.first_name,
+        lastName: data.last_name,
+        email: data.email,
+        phone: data.phone
+      };
+
+      return userData;
+    } catch (error) {
+      console.error('OTP verification error:', error);
+      throw error;
+    }
+  };
+
+  const resendOTP = async (email: string) => {
+    try {
+      console.log('Resending OTP...');
+      const response = await fetch(`${API_BASE_URL}/register/resend/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resend OTP');
+      }
+
+      console.log('OTP resent successfully');
+      return Promise.resolve();
+    } catch (error) {
+      console.error('Resend OTP error:', error);
       throw error;
     }
   };
@@ -170,7 +243,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user, 
       loading, 
       signIn, 
-      signUp, 
+      requestRegistration,
+      verifyOTP,
+      resendOTP,
       signOut,
       setUser: setUserData 
     }}>

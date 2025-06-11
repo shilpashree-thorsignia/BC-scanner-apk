@@ -28,7 +28,8 @@ function AppLayout() {
       segments[1] === 'WelcomeScreen' ||
       segments[1] === 'LoginScreen' ||
       segments[1] === 'SignupScreen' ||
-      segments[1] === 'ForgotPasswordScreen'
+      segments[1] === 'ForgotPasswordScreen' ||
+      segments[1] === 'OTPVerificationScreen'
     );
 
     const inMainApp = segments[0] === 'screens' && (

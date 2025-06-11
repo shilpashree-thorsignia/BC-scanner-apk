@@ -1,5 +1,7 @@
 from django.db import models
 from django.core.validators import MinLengthValidator
+from django.utils import timezone
+from datetime import timedelta
 
 class UserProfile(models.Model):
     first_name = models.CharField(max_length=100)
@@ -7,11 +9,71 @@ class UserProfile(models.Model):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20)
     password = models.CharField(max_length=255)  # Note: In production, always hash passwords
+    is_verified = models.BooleanField(default=False, help_text="Whether email is verified")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} - {self.email}"
+
+class OTPVerification(models.Model):
+    """Model to store OTP codes for email verification during registration"""
+    email = models.EmailField()
+    otp_code = models.CharField(max_length=6)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=20)
+    password_hash = models.CharField(max_length=255)  # Store hashed password temporarily
+    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['email', 'otp_code']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        return f"OTP for {self.email} - {'Used' if self.is_used else 'Active'}"
+    
+    def is_expired(self):
+        """Check if OTP has expired"""
+        return timezone.now() > self.expires_at
+    
+    def is_valid(self):
+        """Check if OTP is valid (not used and not expired)"""
+        return not self.is_used and not self.is_expired()
+    
+    @classmethod
+    def cleanup_expired(cls):
+        """Remove expired OTP records"""
+        expired_count = cls.objects.filter(expires_at__lt=timezone.now()).delete()[0]
+        return expired_count
+    
+    @classmethod
+    def generate_otp(cls, email, first_name, last_name, phone, password_hash, expires_in_minutes=10):
+        """Generate a new OTP for email verification"""
+        import random
+        
+        # Generate 6-digit OTP
+        otp_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        
+        # Clean up any existing OTPs for this email
+        cls.objects.filter(email=email).delete()
+        
+        # Create new OTP
+        otp = cls.objects.create(
+            email=email,
+            otp_code=otp_code,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            password_hash=password_hash,
+            expires_at=timezone.now() + timedelta(minutes=expires_in_minutes)
+        )
+        
+        return otp
 
 class BusinessCard(models.Model):
     CARD_TYPE_CHOICES = [

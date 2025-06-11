@@ -1,5 +1,16 @@
+"""
+Enhanced Gemini AI OCR and QR Code Business Card Scanner Views
+Now supports dual-side scanning with comprehensive field extraction
+"""
+
 import re
 import os
+import io
+import base64
+import json
+import time
+import datetime
+import logging
 # QR code scanning is disabled on Windows due to pyzbar compatibility issues
 # pyzbar requires additional Windows system dependencies that are not easily installable
 PYZBAR_AVAILABLE = False
@@ -11,10 +22,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
-from django.contrib.auth.hashers import check_password
-from .models import BusinessCard, UserProfile, EmailConfig
+from django.contrib.auth.hashers import make_password, check_password
+from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
+from .models import BusinessCard, UserProfile, EmailConfig, OTPVerification
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
-import logging
 
 # Load environment variables early
 try:
@@ -257,7 +270,8 @@ except Exception as e:
     print(f"⚠️ Gemini AI initialization deferred: {e}")
 
 
-class UserRegistrationView(APIView):
+class UserRegistrationRequestView(APIView):
+    """First step: Request registration and send OTP"""
     permission_classes = [AllowAny]
     
     def post(self, request, format=None):
@@ -265,32 +279,237 @@ class UserRegistrationView(APIView):
             print(f"📝 Registration request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
             print(f"📋 Registration data: {dict(request.data)}")
             
-            # Use the proper serializer for validation and user creation
-            serializer = UserProfileSerializer(data=request.data)
+            # Extract registration data
+            email = request.data.get('email', '').strip().lower()
+            first_name = request.data.get('first_name', '').strip()
+            last_name = request.data.get('last_name', '').strip()
+            phone = request.data.get('phone', '').strip()
+            password = request.data.get('password', '')
             
-            if serializer.is_valid():
-                # Save the user using the serializer (this will hash the password)
-                user = serializer.save()
-                
-                print(f"✅ User created successfully: {user.email}")
-                
+            # Validate required fields
+            if not all([email, first_name, last_name, phone, password]):
                 return Response({
-                    'id': user.id,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name,
-                    'phone': user.phone,
-                    'message': 'User registered successfully'
-                }, status=status.HTTP_201_CREATED)
-            else:
-                print(f"❌ Registration validation errors: {serializer.errors}")
-                return Response({
-                    'error': 'Validation failed',
-                    'validation_errors': serializer.errors
+                    'error': 'All fields are required: email, first_name, last_name, phone, password'
                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if user already exists
+            if UserProfile.objects.filter(email=email).exists():
+                return Response({
+                    'error': 'User with this email already exists'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Hash the password
+            password_hash = make_password(password)
+            
+            # Generate OTP and store registration data
+            otp_record = OTPVerification.generate_otp(
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone,
+                password_hash=password_hash
+            )
+            
+            # Send OTP email
+            email_result = OTPEmailService.send_otp_email(email, otp_record.otp_code, first_name)
+            
+            if email_result['success']:
+                print(f"✅ OTP email sent successfully to {email}")
+                return Response({
+                    'message': 'Registration initiated. Please check your email for the verification code.',
+                    'email': email,
+                    'expires_in_minutes': 10
+                }, status=status.HTTP_200_OK)
+            else:
+                # Clean up OTP record if email failed
+                otp_record.delete()
+                print(f"❌ Failed to send OTP email: {email_result['message']}")
+                return Response({
+                    'error': f'Failed to send verification email: {email_result["message"]}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Exception as e:
-            print(f"❌ Registration error: {str(e)}")
+            print(f"❌ Registration request error: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserRegistrationVerifyView(APIView):
+    """Second step: Verify OTP and complete registration"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        try:
+            print(f"🔐 OTP verification request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
+            
+            email = request.data.get('email', '').strip().lower()
+            otp_code = request.data.get('otp_code', '').strip()
+            
+            if not email or not otp_code:
+                return Response({
+                    'error': 'Email and OTP code are required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find and validate OTP
+            try:
+                otp_record = OTPVerification.objects.get(email=email, otp_code=otp_code)
+            except OTPVerification.DoesNotExist:
+                print(f"❌ Invalid OTP for {email}")
+                return Response({
+                    'error': 'Invalid OTP code'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if OTP is still valid
+            if otp_record.is_expired():
+                # Clean up expired record and suggest starting over
+                otp_record.delete()
+                return Response({
+                    'error': 'Registration session has expired. Please start the registration process again.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if OTP is already used
+            if otp_record.is_used:
+                print(f"🚫 Already used OTP for {email}")
+                return Response({
+                    'error': 'OTP code has already been used'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Store OTP data before creating user
+            old_first_name = otp_record.first_name
+            old_last_name = otp_record.last_name
+            old_phone = otp_record.phone
+            old_password_hash = otp_record.password_hash
+            old_email = otp_record.email
+            
+            # Check if user already exists (double-check)
+            if UserProfile.objects.filter(email=email).exists():
+                otp_record.delete()
+                return Response({
+                    'error': 'User with this email already exists'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Create the user account
+            user = UserProfile.objects.create(
+                email=email,
+                first_name=old_first_name,
+                last_name=old_last_name,
+                phone=old_phone,
+                password=old_password_hash,
+                is_verified=True  # Mark as verified since OTP was successful
+            )
+            
+            # Mark OTP as used and delete it
+            otp_record.is_used = True
+            otp_record.save()
+            otp_record.delete()  # Clean up after successful verification
+            
+            print(f"✅ User registration completed successfully: {user.email}")
+            
+            return Response({
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'phone': user.phone,
+                'is_verified': user.is_verified,
+                'message': 'Registration completed successfully! Your email has been verified.'
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            print(f"❌ OTP verification error: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserRegistrationView(APIView):
+    """Legacy registration endpoint - now redirects to two-step process"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        # Redirect to new two-step process
+        return Response({
+            'message': 'Registration process has been updated. Please use the two-step verification process.',
+            'instructions': {
+                'step1': 'POST /api/register/request/ with your details to receive OTP',
+                'step2': 'POST /api/register/verify/ with email and OTP to complete registration',
+                'resend_otp': '/api/register/resend/'
+            },
+            'endpoints': {
+                'request_registration': '/api/register/request/',
+                'verify_otp': '/api/register/verify/',
+                'resend_otp': '/api/register/resend/'
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class UserRegistrationResendOTPView(APIView):
+    """Resend OTP for registration verification"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        try:
+            print(f"🔄 OTP resend request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
+            
+            email = request.data.get('email', '').strip().lower()
+            
+            if not email:
+                return Response({
+                    'error': 'Email is required'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Find existing OTP record
+            try:
+                otp_record = OTPVerification.objects.filter(email=email, is_used=False).latest('created_at')
+            except OTPVerification.DoesNotExist:
+                return Response({
+                    'error': 'No pending registration found for this email. Please start registration process again.'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            # Check if the OTP is still valid (not too old)
+            if otp_record.is_expired():
+                # Clean up expired record and suggest starting over
+                otp_record.delete()
+                return Response({
+                    'error': 'Registration session has expired. Please start the registration process again.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Delete the old OTP record before creating a new one
+            old_first_name = otp_record.first_name
+            old_last_name = otp_record.last_name
+            old_phone = otp_record.phone
+            old_password_hash = otp_record.password_hash
+            old_email = otp_record.email
+            
+            # Delete the old OTP record first
+            otp_record.delete()
+            
+            # Generate new OTP with the same registration data
+            new_otp_record = OTPVerification.generate_otp(
+                email=old_email,
+                first_name=old_first_name,
+                last_name=old_last_name,
+                phone=old_phone,
+                password_hash=old_password_hash
+            )
+            
+            # Send new OTP email
+            email_result = OTPEmailService.send_otp_email(email, new_otp_record.otp_code, old_first_name)
+            
+            if email_result['success']:
+                print(f"✅ OTP resent successfully to {email}")
+                return Response({
+                    'message': 'New verification code sent to your email.',
+                    'email': email,
+                    'expires_in_minutes': 10
+                }, status=status.HTTP_200_OK)
+            else:
+                # Clean up new OTP record if email failed
+                new_otp_record.delete()
+                print(f"❌ Failed to resend OTP email: {email_result['message']}")
+                return Response({
+                    'error': f'Failed to send verification email: {email_result["message"]}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Exception as e:
+            print(f"❌ OTP resend error: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -320,16 +539,38 @@ class UserLoginView(APIView):
         
         print(f"🔐 Login attempt from {request.META.get('REMOTE_ADDR', 'unknown')} for email: {email}")
         
+        # Clean up expired OTP records on login attempt
+        try:
+            expired_count = OTPVerification.cleanup_expired()
+            if expired_count > 0:
+                print(f"🧹 Cleaned up {expired_count} expired OTP records")
+        except Exception as e:
+            print(f"⚠️ OTP cleanup error: {e}")
+        
         try:
             user = UserProfile.objects.get(email=email)
             if check_password(password, user.password):
-                print(f"✅ Login successful for user: {email}")
+                # Check if user's email is verified
+                if not user.is_verified:
+                    print(f"❌ Unverified email login attempt: {email}")
+                    return Response({
+                        'error': 'Email not verified. Please verify your email before logging in.',
+                        'email_verified': False,
+                        'instructions': {
+                            'message': 'Check your email for the verification code, or request a new one.',
+                            'resend_endpoint': '/api/register/resend/'
+                        }
+                    }, status=status.HTTP_403_FORBIDDEN)
+                
+                print(f"✅ Login successful for verified user: {email}")
                 return Response({
                     'id': user.id,
                     'email': user.email,
                     'first_name': user.first_name,
                     'last_name': user.last_name,
-                    'phone': user.phone
+                    'phone': user.phone,
+                    'is_verified': user.is_verified,
+                    'login_success': True
                 })
             else:
                 print(f"❌ Invalid password for user: {email}")
@@ -391,7 +632,6 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             business_card_name = instance.name or "Unknown"
             
             # Perform soft delete instead of hard delete
-            from django.utils import timezone
             instance.is_deleted = True
             instance.deleted_at = timezone.now()
             instance.save()
@@ -432,7 +672,6 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             elif 'image' in request.data and isinstance(request.data['image'], str):
                 # Base64 encoded image
                 try:
-                    import base64
                     image_b64 = request.data['image']
                     # Remove data URL prefix if present
                     if image_b64.startswith('data:image'):
@@ -1320,111 +1559,249 @@ Business Card Scanner App""".format(
             )
 
 
+class OTPEmailService:
+    """Service to handle OTP email sending for user registration verification"""
+    
+    @staticmethod
+    def send_otp_email(email, otp_code, first_name):
+        """Send OTP verification email to the user"""
+        try:
+            subject = "🔐 Email Verification - Business Card Scanner"
+            
+            # Create HTML email content
+            html_message = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Email Verification</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                        <h1 style="margin: 0 0 10px 0; font-size: 28px;">📧 Email Verification</h1>
+                        <p style="margin: 0; font-size: 16px;">Business Card Scanner App</p>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px;">
+                        <h2 style="color: #333; margin-top: 0;">Hi {first_name}! 👋</h2>
+                        <p style="color: #555; line-height: 1.6;">Thank you for registering with our Business Card Scanner app! To complete your registration, please verify your email address using the OTP code below:</p>
+                        
+                        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 25px; text-align: center; margin: 25px 0;">
+                            <p style="margin: 0 0 10px 0; font-size: 16px; color: #666;">Your Verification Code:</p>
+                            <div style="font-size: 36px; font-weight: bold; color: #667eea; letter-spacing: 8px; font-family: 'Courier New', Consolas, monospace; margin: 10px 0;">{otp_code}</div>
+                        </div>
+                        
+                        <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                            <strong style="color: #856404;">⏰ Important:</strong> <span style="color: #856404;">This verification code will expire in <strong>10 minutes</strong>. Please enter it in the app to complete your registration.</span>
+                        </div>
+                        
+                        <p style="color: #333; font-weight: bold; margin: 20px 0 10px 0;">What's next?</p>
+                        <ul style="color: #555; line-height: 1.6; padding-left: 20px;">
+                            <li>Enter this 6-digit code in the verification screen</li>
+                            <li>Complete your account setup</li>
+                            <li>Start scanning business cards instantly!</li>
+                        </ul>
+                        
+                        <p style="color: #777; font-size: 14px; margin-top: 25px;">If you didn't create an account with us, please ignore this email.</p>
+                        
+                        <div style="text-align: center; margin-top: 30px; color: #6c757d; font-size: 14px; border-top: 1px solid #dee2e6; padding-top: 20px;">
+                            <p style="margin: 5px 0;"><strong>📱 Business Card Scanner App</strong></p>
+                            <p style="margin: 5px 0;">This is an automated message, please do not reply.</p>
+                        </div>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Plain text version
+            text_message = f"""
+🔐 Email Verification - Business Card Scanner
+
+Hi {first_name}!
+
+Thank you for registering with our Business Card Scanner app!
+
+Your verification code is: {otp_code}
+
+⏰ This code will expire in 10 minutes.
+
+Please enter this code in the app to complete your registration.
+
+If you didn't create an account with us, please ignore this email.
+
+📱 Business Card Scanner App
+            """
+            
+            # Try to get email configuration
+            try:
+                email_config = EmailConfig.objects.first()
+                if email_config and email_config.is_enabled:
+                    # Use configured email settings
+                    result = EmailService.send_email(
+                        config=email_config,
+                        subject=subject,
+                        message=html_message,
+                        recipient_email=email
+                    )
+                    return result
+                else:
+                    # Fallback to Django default email settings
+                    send_mail(
+                        subject=subject,
+                        message=text_message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[email],
+                        html_message=html_message,
+                        fail_silently=False,
+                    )
+                    return {
+                        'success': True,
+                        'message': f'OTP email sent successfully to {email}'
+                    }
+                    
+            except Exception as e:
+                logging.error(f"Failed to send OTP email: {e}")
+                return {
+                    'success': False,
+                    'message': f'Failed to send OTP email: {str(e)}'
+                }
+                
+        except Exception as e:
+            logging.error(f"OTP email service error: {e}")
+            return {
+                'success': False,
+                'message': f'Email service error: {str(e)}'
+            }
+
+
 class EmailService:
-    """Service class for sending emails using SMTP"""
+    """
+    Service class for sending emails with automated follow-up functionality.
+    Supports business card owner notification emails.
+    """
     
     @staticmethod
     def send_email(config, subject, message, recipient_email=None, business_card=None):
         """
-        Send email using the provided configuration
+        Send email using provided configuration
         
         Args:
-            config: EmailConfig object
-            subject: Email subject
-            message: Email message body
-            recipient_email: Override recipient email (optional)
-            business_card: BusinessCard object for attachments (optional)
-        
+            config: EmailConfig object with SMTP settings
+            subject: Email subject line
+            message: Email message content
+            recipient_email: Recipient email (overrides config recipient if provided)
+            business_card: BusinessCard object for context
+            
         Returns:
             dict: {'success': bool, 'message': str}
         """
         try:
-            if not config.is_enabled:
-                return {'success': False, 'message': 'Email notifications are disabled'}
+            import smtplib
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
             
-            # Use provided recipient or default from config
-            to_email = recipient_email or config.recipient_email
+            # Determine recipient email
+            if recipient_email:
+                to_email = recipient_email
+            else:
+                to_email = config.recipient_email
+            
+            print(f"📧 Sending email TO: {to_email}")
+            print(f"📧 From: {config.sender_email}")
+            print(f"📧 Subject: {subject}")
             
             # Create message
             msg = MIMEMultipart('alternative')
-            msg['From'] = formataddr(('Business Card Scanner', config.sender_email))
+            msg['From'] = config.sender_email
             msg['To'] = to_email
             msg['Subject'] = subject
             
-            # Create HTML and plain text versions
-            text_content = message
-            html_content = f"""
-            <html>
-              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                  <h2 style="color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
-                    Business Card Scanner Notification
-                  </h2>
-                  <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    {message.replace('\n', '<br>')}
-                  </div>
-                  
-                  {EmailService._format_business_card_html(business_card) if business_card else ''}
-                  
-                  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
-                    <p>This is an automated message from your Business Card Scanner App.</p>
-                    <p>Time: {EmailService._get_formatted_datetime()}</p>
-                  </div>
-                </div>
-              </body>
-            </html>
-            """
+            # Check if message contains HTML
+            if '<html>' in message or '<div>' in message:
+                # Add HTML content
+                html_part = MIMEText(message, 'html')
+                msg.attach(html_part)
+                
+                # Create plain text version
+                import re
+                text_content = re.sub(r'<[^>]+>', '', message)
+                text_content = re.sub(r'\s+', ' ', text_content).strip()
+                text_part = MIMEText(text_content, 'plain')
+                msg.attach(text_part)
+            else:
+                # Plain text message
+                text_part = MIMEText(message, 'plain')
+                msg.attach(text_part)
             
-            # Attach both versions
-            msg.attach(MIMEText(text_content, 'plain'))
-            msg.attach(MIMEText(html_content, 'html'))
+            # Add business card details if provided
+            if business_card:
+                html_details = EmailService._format_business_card_html(business_card)
+                if html_details:
+                    # Update the HTML part to include business card details
+                    enhanced_html = f"""
+                    <html>
+                    <body>
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px;">
+                                {message.replace('<html>', '').replace('</html>', '').replace('<body>', '').replace('</body>', '')}
+                            </div>
+                            {html_details}
+                            <div style="margin-top: 20px; text-align: center; color: #6c757d; font-size: 12px;">
+                                <p>Sent at {EmailService._get_formatted_datetime()}</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    
+                    # Replace the HTML part
+                    for part in msg.walk():
+                        if part.get_content_type() == 'text/html':
+                            part.set_payload(enhanced_html)
             
-            # Attach business card image if available
-            if business_card and business_card.image:
-                try:
-                    with open(business_card.image.path, 'rb') as f:
-                        img_data = f.read()
-                    img = MIMEImage(img_data)
-                    img.add_header('Content-Disposition', 'attachment', filename=f'business_card_{business_card.id}.jpg')
-                    msg.attach(img)
-                except Exception as e:
-                    print(f"⚠️ Could not attach business card image: {e}")
+            # Connect to SMTP server and send
+            try:
+                smtp_port = int(config.smtp_port)
+            except (ValueError, TypeError):
+                smtp_port = 587
             
-            # Send email
-            smtp_port = int(config.smtp_port)
-            
-            # Create SSL context
-            context = ssl.create_default_context()
+            print(f"🔧 Connecting to SMTP: {config.smtp_host}:{smtp_port}")
             
             with smtplib.SMTP(config.smtp_host, smtp_port) as server:
-                server.starttls(context=context)  # Enable security
+                server.starttls()
                 server.login(config.sender_email, config.sender_password)
                 server.send_message(msg)
             
+            success_message = f'Email sent successfully to {to_email}'
+            print(f"✅ {success_message}")
+            
             return {
-                'success': True, 
-                'message': f'Email sent successfully to {to_email}'
+                'success': True,
+                'message': success_message
             }
             
         except smtplib.SMTPAuthenticationError as e:
+            error_msg = f"SMTP Authentication failed. Please check your email and app password: {str(e)}"
+            print(f"❌ {error_msg}")
             return {
                 'success': False,
-                'message': f'Authentication failed. Please check your email and password. Error: {str(e)}'
-            }
-        except smtplib.SMTPConnectError as e:
-            return {
-                'success': False,
-                'message': f'Could not connect to SMTP server. Please check your SMTP settings. Error: {str(e)}'
+                'message': error_msg
             }
         except smtplib.SMTPException as e:
+            error_msg = f"SMTP error occurred: {str(e)}"
+            print(f"❌ {error_msg}")
             return {
                 'success': False,
-                'message': f'SMTP error occurred: {str(e)}'
+                'message': error_msg
             }
         except Exception as e:
+            error_msg = f"Failed to send email: {str(e)}"
+            print(f"❌ {error_msg}")
             return {
                 'success': False,
-                'message': f'Failed to send email: {str(e)}'
+                'message': error_msg
             }
     
     @staticmethod
@@ -1451,7 +1828,6 @@ class EmailService:
     @staticmethod
     def _get_formatted_datetime():
         """Get formatted current datetime"""
-        from django.utils import timezone
         return timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")
 
     @staticmethod
