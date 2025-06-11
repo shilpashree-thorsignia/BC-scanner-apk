@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import BusinessCard, UserProfile, EmailConfig
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
+import re
 
 class BusinessCardSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
@@ -26,6 +27,29 @@ class BusinessCardSerializer(serializers.ModelSerializer):
             'deleted_at'
         ]
         read_only_fields = ('image_url', 'deleted_at')
+    
+    def validate_website(self, value):
+        """Validate and normalize website URL"""
+        if not value or value.strip() == '':
+            return ''
+        
+        # Clean the value
+        website = value.strip()
+        
+        # If it's already a valid URL, return as is
+        if website.startswith(('http://', 'https://')):
+            return website
+        
+        # If it starts with www., add https://
+        if website.startswith('www.'):
+            return f'https://{website}'
+        
+        # If it looks like a domain (contains a dot), add https://www.
+        if '.' in website and not website.startswith(('http://', 'https://', 'www.')):
+            return f'https://www.{website}'
+        
+        # If it doesn't look like a URL, return empty string
+        return ''
     
     def get_image_url(self, obj):
         if obj.image:
