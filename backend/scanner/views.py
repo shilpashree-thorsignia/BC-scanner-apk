@@ -650,28 +650,34 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             # Get the extracted data
             parsed_data = result['data'] if 'data' in result else result
             
-            # Map the comprehensive data to our business card fields
+            # Helper function to truncate fields to model limits
+            def truncate_field(value, max_length):
+                if not value:
+                    return ''
+                return str(value)[:max_length] if len(str(value)) > max_length else str(value)
+
+            # Map the comprehensive data to our business card fields with proper truncation
             mapped_data = {
                 # Personal Information
                 'name': parsed_data.get('name', '') or f"{parsed_data.get('first_name', '')} {parsed_data.get('last_name', '')}".strip(),
-                'first_name': parsed_data.get('first_name', ''),
-                'last_name': parsed_data.get('last_name', ''),
-                'middle_name': parsed_data.get('middle_name', ''),
+                'first_name': truncate_field(parsed_data.get('first_name', ''), 100),
+                'last_name': truncate_field(parsed_data.get('last_name', ''), 100),
+                'middle_name': truncate_field(parsed_data.get('middle_name', ''), 100),
                 
                 # Contact Information
                 'email': parsed_data.get('email', ''),
                 'email_secondary': parsed_data.get('email_secondary', ''),
-                'mobile': parsed_data.get('mobile', ''),
-                'mobile_secondary': parsed_data.get('mobile_secondary', ''),
-                'landline': parsed_data.get('landline', ''),
-                'fax': parsed_data.get('fax', ''),
+                'mobile': truncate_field(parsed_data.get('mobile', ''), 20),
+                'mobile_secondary': truncate_field(parsed_data.get('mobile_secondary', ''), 20),
+                'landline': truncate_field(parsed_data.get('landline', ''), 20),
+                'fax': truncate_field(parsed_data.get('fax', ''), 20),
                 
                 # Company Information
-                'company': parsed_data.get('company', ''),
-                'company_full_name': parsed_data.get('company_full_name', ''),
-                'department': parsed_data.get('department', ''),
-                'job_title': parsed_data.get('job_title', ''),
-                'job_title_secondary': parsed_data.get('job_title_secondary', ''),
+                'company': truncate_field(parsed_data.get('company', ''), 200),
+                'company_full_name': truncate_field(parsed_data.get('company_full_name', ''), 300),
+                'department': truncate_field(parsed_data.get('department', ''), 200),
+                'job_title': truncate_field(parsed_data.get('job_title', ''), 200),
+                'job_title_secondary': truncate_field(parsed_data.get('job_title_secondary', ''), 200),
                 
                 # Digital Presence
                 'website': parsed_data.get('website', ''),
@@ -680,18 +686,18 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 'twitter': parsed_data.get('twitter', ''),
                 'facebook': parsed_data.get('facebook', ''),
                 'instagram': parsed_data.get('instagram', ''),
-                'skype': parsed_data.get('skype', ''),
+                'skype': truncate_field(parsed_data.get('skype', ''), 100),
                 
                 # Address Information
                 'address': parsed_data.get('address', ''),
-                'street_address': parsed_data.get('street_address', ''),
-                'city': parsed_data.get('city', ''),
-                'state': parsed_data.get('state', ''),
-                'postal_code': parsed_data.get('postal_code', ''),
-                'country': parsed_data.get('country', ''),
+                'street_address': truncate_field(parsed_data.get('street_address', ''), 300),
+                'city': truncate_field(parsed_data.get('city', ''), 100),
+                'state': truncate_field(parsed_data.get('state', ''), 100),
+                'postal_code': truncate_field(parsed_data.get('postal_code', ''), 20),
+                'country': truncate_field(parsed_data.get('country', ''), 100),
                 
                 # Business Information
-                'industry': parsed_data.get('industry', ''),
+                'industry': truncate_field(parsed_data.get('industry', ''), 200),
                 'services': parsed_data.get('services', ''),
                 'specialization': parsed_data.get('specialization', ''),
                 'certifications': parsed_data.get('certifications', ''),
@@ -699,9 +705,9 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 
                 # QR Code and Languages
                 'qr_code_data': parsed_data.get('qr_code_data', ''),
-                'primary_language': parsed_data.get('primary_language', ''),
-                'secondary_language': parsed_data.get('secondary_language', ''),
-                'timezone': parsed_data.get('timezone', ''),
+                'primary_language': truncate_field(parsed_data.get('primary_language', ''), 50),
+                'secondary_language': truncate_field(parsed_data.get('secondary_language', ''), 50),
+                'timezone': truncate_field(parsed_data.get('timezone', ''), 50),
                 
                 # Metadata
                 'notes': self._build_notes_from_dual_scan(parsed_data),
@@ -715,6 +721,21 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 'image_back': back_image,
             }
             
+            # Store any truncated data in notes for reference
+            truncated_info = []
+            if len(str(parsed_data.get('landline', ''))) > 20:
+                truncated_info.append(f"Full Landline: {parsed_data.get('landline', '')}")
+            if len(str(parsed_data.get('mobile', ''))) > 20:
+                truncated_info.append(f"Full Mobile: {parsed_data.get('mobile', '')}")
+            if len(str(parsed_data.get('fax', ''))) > 20:
+                truncated_info.append(f"Full Fax: {parsed_data.get('fax', '')}")
+            
+            # Add truncated info to notes if any
+            if truncated_info:
+                existing_notes = mapped_data.get('notes', '')
+                additional_notes = " | ".join(truncated_info)
+                mapped_data['notes'] = f"{existing_notes} | {additional_notes}" if existing_notes else additional_notes
+            
             # Normalize website URL if present
             if mapped_data.get('website') and not mapped_data['website'].startswith(('http://', 'https://')):
                 website = mapped_data['website'].strip()
@@ -727,24 +748,55 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             if user_id:
                 mapped_data['user_id'] = user_id
             
-            # Save the business card
-            serializer = BusinessCardSerializer(data=mapped_data)
+            # Create data without images first for validation
+            data_without_images = {k: v for k, v in mapped_data.items() if k not in ['image_front', 'image_back']}
+            
+            # Save the business card without images first
+            serializer = BusinessCardSerializer(data=data_without_images)
             if serializer.is_valid():
                 business_card = serializer.save()
+                
+                # Now add the images to the saved business card
+                # Use Django's file handling to properly save the uploaded files
+                if front_image:
+                    business_card.image_front.save(
+                        front_image.name,
+                        front_image,
+                        save=False
+                    )
+                if back_image:
+                    business_card.image_back.save(
+                        back_image.name,
+                        back_image,
+                        save=False
+                    )
+                
+                # Save the business card with only the image fields updated
+                business_card.save(update_fields=['image_front', 'image_back'])
+                
                 print(f"✅ Dual-side business card saved successfully: {business_card.id}")
+                
+                # Create a clean response with serialized business card data
+                response_data = BusinessCardSerializer(business_card).data
+                
                 return Response({
                     'message': 'Dual-side business card scanned successfully',
                     'scan_type': 'dual_side',
                     'confidence_score': parsed_data.get('scan_confidence', 95),
                     'processing_time': parsed_data.get('processing_time', 0),
-                    'business_card': BusinessCardSerializer(business_card).data,
-                    'extraction_details': result
+                    'business_card': response_data,
+                    'extraction_details': {
+                        'success': result.get('success', True),
+                        'scan_method': result.get('scan_method', 'gemini_dual_side'),
+                        'processing_time': result.get('processing_time', 0),
+                        'metadata': result.get('metadata', {})
+                    }
                 }, status=status.HTTP_201_CREATED)
             else:
                 print(f"❌ Serializer validation failed: {serializer.errors}")
                 return Response({
                     'message': 'Dual-side OCR successful but validation failed',
-                    'extracted_data': mapped_data,
+                    'extracted_data': data_without_images,
                     'validation_errors': serializer.errors
                 }, status=status.HTTP_400_BAD_REQUEST)
             

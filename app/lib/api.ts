@@ -317,7 +317,8 @@ export const getDeletedBusinessCards = async (): Promise<BusinessCard[]> => {
     }
     
     const data = await response.json();
-    return data;
+    // Extract business_cards array from the response object
+    return data.business_cards || [];
   } catch (error) {
     console.error('Error fetching deleted business cards:', error);
     throw error;
