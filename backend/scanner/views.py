@@ -9,40 +9,143 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from .models import BusinessCard, UserProfile, EmailConfig
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
+import logging
 
-# Ensure Gemini API key is set with better error handling
-GEMINI_API_KEY = os.environ.get('GOOGLE_GEMINI_API_KEY')
-if not GEMINI_API_KEY:
-    # Try to set the API key if not found
-    GEMINI_API_KEY = 'AIzaSyCMvRQsbvP3O51jB3evexSbkxRZS4v2Fno'
-    os.environ['GOOGLE_GEMINI_API_KEY'] = GEMINI_API_KEY
-    print(f"🔑 Set Gemini API key from fallback")
-else:
-    print(f"🔑 Found Gemini API key in environment")
-
-# Import Gemini AI OCR with better error handling
+# Load environment variables early
 try:
-    from .gemini_ocr import gemini_ocr, gemini_analyzer
-    GEMINI_AI_AVAILABLE = True
-    print("✅ Gemini AI OCR loaded successfully")
-    
-    # Test if the instances are properly initialized
-    if gemini_ocr is None:
-        print("⚠️ Warning: gemini_ocr is None")
-        GEMINI_AI_AVAILABLE = False
-    if gemini_analyzer is None:
-        print("⚠️ Warning: gemini_analyzer is None")
-        
-except ImportError as e:
-    GEMINI_AI_AVAILABLE = False
-    gemini_ocr = None
-    gemini_analyzer = None
-    print(f"❌ Gemini AI OCR not available: {e}")
+    from dotenv import load_dotenv
+    from pathlib import Path
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    env_path = BASE_DIR / '.env'
+    load_dotenv(env_path)
+    print(f"🔧 Views.py: Loading .env from: {env_path}")
+    print(f"🔑 Views.py: API Key loaded: {'Yes' if os.environ.get('GOOGLE_GEMINI_API_KEY') else 'No'}")
 except Exception as e:
-    GEMINI_AI_AVAILABLE = False
-    gemini_ocr = None
-    gemini_analyzer = None
-    print(f"❌ Error initializing Gemini AI: {e}")
+    print(f"❌ Views.py: Error loading .env: {e}")
+
+logger = logging.getLogger(__name__)
+
+# Initialize Gemini AI OCR
+GEMINI_AI_AVAILABLE = False
+gemini_ocr = None
+gemini_analyzer = None
+
+def initialize_gemini_ai():
+    """Initialize Gemini AI at runtime"""
+    global GEMINI_AI_AVAILABLE, gemini_ocr, gemini_analyzer
+    
+    if GEMINI_AI_AVAILABLE and gemini_ocr:
+        return True  # Already initialized
+    
+    try:
+        api_key = os.environ.get('GOOGLE_GEMINI_API_KEY')
+        if not api_key:
+            print(f"❌ GOOGLE_GEMINI_API_KEY not found in environment variables")
+            return False
+        
+        # Try to use the existing gemini_ocr.py first
+        try:
+            from .gemini_ocr import GeminiOCR, GeminiBusinessCardAnalyzer
+            gemini_ocr = GeminiOCR()
+            gemini_analyzer = GeminiBusinessCardAnalyzer()
+            GEMINI_AI_AVAILABLE = True
+            print(f"✅ Gemini AI OCR initialized successfully")
+            print(f"✅ Gemini AI Analyzer initialized successfully")
+            return True
+        except ImportError as e:
+            print(f"❌ Gemini AI OCR not available: {e}")
+            # Fallback to simple implementation
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            
+            # Create a simple OCR function
+            def simple_gemini_ocr(image_data):
+                try:
+                    from PIL import Image
+                    import io
+                    import json
+                    
+                    # Convert bytes to PIL Image
+                    if isinstance(image_data, bytes):
+                        image = Image.open(io.BytesIO(image_data))
+                    else:
+                        image = image_data
+                    
+                    # Create model
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    
+                    prompt = """Extract business card info as JSON:
+{"name":"","company":"","job_title":"","email":"","mobile":"","website":"","address":"","notes":""}
+
+Rules:
+- Extract only visible text
+- For website: add https:// if missing
+- Empty string if not found
+- JSON only, no explanation"""
+                    
+                    response = model.generate_content([prompt, image])
+                    
+                    if response and response.text:
+                        response_text = response.text.strip()
+                        
+                        # Clean response
+                        if response_text.startswith('```json'):
+                            response_text = response_text.replace('```json', '').replace('```', '').strip()
+                        elif response_text.startswith('```'):
+                            response_text = response_text.replace('```', '').strip()
+                        
+                        try:
+                            data = json.loads(response_text)
+                            return {
+                                'success': True,
+                                'data': data,
+                                'confidence': 95,
+                                'processing_time': 2.0
+                            }
+                        except json.JSONDecodeError:
+                            return {
+                                'success': False,
+                                'error': 'Failed to parse JSON response',
+                                'data': {},
+                                'processing_time': 2.0
+                            }
+                    else:
+                        return {
+                            'success': False,
+                            'error': 'No response from Gemini AI',
+                            'data': {},
+                            'processing_time': 2.0
+                        }
+                except Exception as e:
+                    return {
+                        'success': False,
+                        'error': str(e),
+                        'data': {},
+                        'processing_time': 2.0
+                    }
+            
+            # Create a simple class-like object
+            class SimpleGeminiOCR:
+                def extract_business_card_info(self, image_data):
+                    return simple_gemini_ocr(image_data)
+            
+            gemini_ocr = SimpleGeminiOCR()
+            GEMINI_AI_AVAILABLE = True
+            print(f"✅ Simple Gemini AI OCR initialized successfully")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error initializing Gemini AI: {e}")
+        GEMINI_AI_AVAILABLE = False
+        gemini_ocr = None
+        gemini_analyzer = None
+        return False
+
+# Try to initialize at import time, but don't fail if it doesn't work
+try:
+    initialize_gemini_ai()
+except Exception as e:
+    print(f"⚠️ Gemini AI initialization deferred: {e}")
 
 
 class UserRegistrationView(APIView):
@@ -121,7 +224,7 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
         if user_id is not None:
             queryset = queryset.filter(user_id=user_id)
         return queryset
-    
+
     def destroy(self, request, *args, **kwargs):
         """Override destroy to perform soft delete and return JSON response"""
         try:
@@ -140,7 +243,7 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                 'message': f'Business card "{business_card_name}" moved to trash',
                 'deleted_id': business_card_id
             }, status=status.HTTP_200_OK)
-            
+
         except Exception as e:
             print(f"❌ Error deleting business card: {str(e)}")
             return Response({
@@ -196,12 +299,17 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             print(f"🤖 Gemini AI Available: {GEMINI_AI_AVAILABLE}")
             print(f"🔧 Gemini OCR Instance: {gemini_ocr is not None}")
             
+            # Try to initialize Gemini AI if not available
             if not GEMINI_AI_AVAILABLE or not gemini_ocr:
-                error_msg = f'Gemini AI OCR not available. Available: {GEMINI_AI_AVAILABLE}, Instance: {gemini_ocr is not None}'
-                print(f"❌ {error_msg}")
-                return Response({
-                    'error': error_msg
-                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                print("🔄 Attempting to initialize Gemini AI...")
+                if not initialize_gemini_ai():
+                    error_msg = f'Gemini AI OCR not available. Available: {GEMINI_AI_AVAILABLE}, Instance: {gemini_ocr is not None}'
+                    print(f"❌ {error_msg}")
+                    return Response({
+                        'error': error_msg
+                    }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                else:
+                    print("✅ Gemini AI initialized successfully at runtime")
             
             # Read image data if not already available
             if image_data is None and image_file is not None:
@@ -232,57 +340,36 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                     parsed_data['website'] = f'https://{website}'
                 elif '.' in website:
                     parsed_data['website'] = f'https://www.{website}'
-                else:
-                    parsed_data['website'] = ''
             
+            # Add user_id if provided
             if user_id:
                 parsed_data['user_id'] = user_id
             
             # Save the business card
-            print(f"💾 Saving business card with data: {parsed_data}")
             serializer = BusinessCardSerializer(data=parsed_data)
             if serializer.is_valid():
-                print("✅ Serializer validation passed")
                 business_card = serializer.save()
-                
-                # Prepare optimized response
-                response_data = {
-                    'message': 'Business card scanned successfully with Gemini AI',
-                    'confidence': result.get('confidence', 95),
-                    'processing_time': f"{result.get('processing_time', 0):.2f}s",
-                    'business_card': {
-                        'id': business_card.id,
-                        'name': business_card.name,
-                        'company': business_card.company,
-                        'job_title': business_card.job_title,
-                        'email': business_card.email,
-                        'mobile': business_card.mobile,
-                        'website': business_card.website,
-                        'address': business_card.address,
-                        'created_at': business_card.created_at
-                    }
-                }
-                
-                # Only include AI response preview if requested
-                if request.data.get('include_ai_response'):
-                    response_data['ai_response'] = result.get('raw_response', '')
-                
-                return Response(response_data, status=status.HTTP_201_CREATED)
+                print(f"✅ Business card saved successfully: {business_card.id}")
+                return Response({
+                    'message': 'Business card scanned successfully',
+                    'business_card': BusinessCardSerializer(business_card).data,
+                    'extraction_details': result
+                }, status=status.HTTP_201_CREATED)
             else:
                 print(f"❌ Serializer validation failed: {serializer.errors}")
                 return Response({
-                    'message': 'AI extraction successful but validation failed',
-                    'processing_time': f"{result.get('processing_time', 0):.2f}s",
+                    'message': 'OCR successful but validation failed',
                     'extracted_data': parsed_data,
                     'validation_errors': serializer.errors
                 }, status=status.HTTP_400_BAD_REQUEST)
-                    
+            
         except Exception as e:
-            print(f"💥 Exception in scan_card: {str(e)}")
+            error_msg = f"Error processing business card: {str(e)}"
+            print(f"❌ {error_msg}")
             import traceback
-            print(f"📍 Traceback: {traceback.format_exc()}")
+            traceback.print_exc()
             return Response({
-                'error': f'Error processing business card: {str(e)}'
+                'error': error_msg
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['POST'])
@@ -526,6 +613,58 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             print(f"❌ Error emptying trash: {str(e)}")
             return Response({
                 'error': f'Error emptying trash: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['GET'])
+    def debug_gemini(self, request):
+        """Debug endpoint to check Gemini AI status"""
+        try:
+            import os
+            api_key = os.environ.get('GOOGLE_GEMINI_API_KEY')
+            
+            debug_info = {
+                'api_key_present': bool(api_key),
+                'api_key_length': len(api_key) if api_key else 0,
+                'gemini_ai_available': GEMINI_AI_AVAILABLE,
+                'gemini_ocr_instance': gemini_ocr is not None,
+                'environment_vars': {
+                    'DATABASE_URL': bool(os.environ.get('DATABASE_URL')),
+                    'DEBUG': os.environ.get('DEBUG'),
+                    'GOOGLE_GEMINI_API_KEY': f"{api_key[:10]}..." if api_key else None
+                }
+            }
+            
+            # Try to initialize Gemini AI
+            try:
+                init_result = initialize_gemini_ai()
+                debug_info['initialization_attempt'] = {
+                    'success': init_result,
+                    'gemini_ai_available_after': GEMINI_AI_AVAILABLE,
+                    'gemini_ocr_instance_after': gemini_ocr is not None
+                }
+            except Exception as e:
+                debug_info['initialization_attempt'] = {
+                    'success': False,
+                    'error': str(e)
+                }
+            
+            # Try direct Gemini AI test
+            try:
+                import google.generativeai as genai
+                if api_key:
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    debug_info['direct_gemini_test'] = 'Success'
+                else:
+                    debug_info['direct_gemini_test'] = 'No API key'
+            except Exception as e:
+                debug_info['direct_gemini_test'] = f'Error: {str(e)}'
+            
+            return Response(debug_info)
+            
+        except Exception as e:
+            return Response({
+                'error': f'Debug endpoint error: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

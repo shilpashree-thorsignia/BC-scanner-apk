@@ -1,14 +1,20 @@
 from pathlib import Path
 import os
 
-# Load environment variables
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables with explicit path
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    env_path = BASE_DIR / '.env'
+    load_dotenv(env_path)
+    print(f"🔧 Loading .env from: {env_path}")
+    print(f"🔑 API Key loaded: {'Yes' if os.environ.get('GOOGLE_GEMINI_API_KEY') else 'No'}")
 except ImportError:
+    print("⚠️ python-dotenv not installed")
     pass
-
-BASE_DIR = Path(__file__).resolve().parent.parent
+except Exception as e:
+    print(f"❌ Error loading .env: {e}")
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-k8#mq3v&x9p7z$w2n5@!c6r1t4y8u9i0o3p6s2a5d8f1g4h7j0k3l6m9')
 
