@@ -273,9 +273,19 @@ Combine information from both sides intelligently. The front side typically has 
                 extracted_data = self._parse_gemini_response(response.text)
                 extracted_data['processing_time'] = processing_time
                 extracted_data['scan_method'] = 'gemini_dual_side'
+                
+                # Ensure metadata exists and update it
+                if 'metadata' not in extracted_data:
+                    extracted_data['metadata'] = {}
                 extracted_data['metadata']['side_analyzed'] = 'both'
                 
-                return extracted_data
+                # Return success structure
+                return {
+                    'success': True,
+                    'data': extracted_data,
+                    'processing_time': processing_time,
+                    'scan_method': 'gemini_dual_side'
+                }
             else:
                 logger.error("Empty response from Gemini AI for dual-side scan")
                 return self._get_error_response("Empty response from AI")
@@ -285,7 +295,7 @@ Combine information from both sides intelligently. The front side typically has 
             return self._get_error_response(f"Dual extraction failed: {str(e)}")
     
     def _parse_gemini_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse and validate Gemini AI JSON response"""
+        """Parse and validate Gemini AI JSON response with robust error handling"""
         try:
             # Clean the response text
             cleaned_text = response_text.strip()
@@ -298,6 +308,12 @@ Combine information from both sides intelligently. The front side typically has 
             if cleaned_text.endswith('```'):
                 cleaned_text = cleaned_text[:-3]
             
+            # Additional cleaning for malformed responses
+            cleaned_text = cleaned_text.strip()
+            
+            # Try to fix common JSON issues
+            cleaned_text = self._fix_common_json_issues(cleaned_text)
+            
             # Parse JSON
             data = json.loads(cleaned_text)
             
@@ -308,15 +324,108 @@ Combine information from both sides intelligently. The front side typically has 
             
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response: {e}")
-            logger.error(f"Response text: {response_text[:500]}...")
-            return self._get_error_response("Failed to parse AI response")
+            logger.error(f"Response text (first 1000 chars): {response_text[:1000]}...")
+            
+            # Try to extract partial data using regex as fallback
+            partial_data = self._extract_partial_data_fallback(response_text)
+            if partial_data:
+                logger.info("Successfully extracted partial data using fallback method")
+                return self._normalize_extracted_data(partial_data)
+            
+            return self._get_error_response(f"Failed to parse JSON response: {str(e)}")
         except Exception as e:
             logger.error(f"Error processing response: {e}")
             return self._get_error_response(f"Processing error: {str(e)}")
     
+    def _fix_common_json_issues(self, text: str) -> str:
+        """Fix common JSON formatting issues from AI responses"""
+        try:
+            # Remove any trailing commas before closing braces/brackets
+            text = re.sub(r',(\s*[}\]])', r'\1', text)
+            
+            # Fix unescaped newlines in strings
+            text = re.sub(r'(?<!\\)\n(?=[^"]*"[^"]*$)', '\\n', text)
+            
+            # Fix unescaped quotes in strings (basic attempt)
+            # This is a simple fix - more sophisticated handling could be added
+            lines = text.split('\n')
+            fixed_lines = []
+            for line in lines:
+                # If line contains quotes and appears to be a JSON property
+                if '"' in line and ':' in line:
+                    # Try to escape unescaped quotes within string values
+                    # This is a basic implementation
+                    fixed_lines.append(line)
+                else:
+                    fixed_lines.append(line)
+            
+            text = '\n'.join(fixed_lines)
+            
+            # Remove any text before the first { or [ if present
+            first_brace = text.find('{')
+            first_bracket = text.find('[')
+            
+            if first_brace != -1 and (first_bracket == -1 or first_brace < first_bracket):
+                text = text[first_brace:]
+            elif first_bracket != -1:
+                text = text[first_bracket:]
+            
+            # Remove any text after the last } or ] if present
+            last_brace = text.rfind('}')
+            last_bracket = text.rfind(']')
+            
+            if last_brace != -1 and (last_bracket == -1 or last_brace > last_bracket):
+                text = text[:last_brace + 1]
+            elif last_bracket != -1:
+                text = text[:last_bracket + 1]
+            
+            return text
+            
+        except Exception as e:
+            logger.warning(f"Error fixing JSON issues: {e}")
+            return text
+    
+    def _extract_partial_data_fallback(self, response_text: str) -> Dict[str, Any]:
+        """Extract partial data using regex when JSON parsing fails"""
+        import re
+        
+        fallback_data = {}
+        
+        try:
+            # Extract common fields using regex patterns
+            patterns = {
+                'name': [r'"name":\s*"([^"]*)"', r'Name:\s*([^\n\r]+)'],
+                'email': [r'"email":\s*"([^"]*)"', r'Email:\s*([^\s\n\r]+)'],
+                'mobile': [r'"mobile":\s*"([^"]*)"', r'Phone:\s*([^\n\r]+)', r'Mobile:\s*([^\n\r]+)'],
+                'company': [r'"company":\s*"([^"]*)"', r'Company:\s*([^\n\r]+)'],
+                'job_title': [r'"job_title":\s*"([^"]*)"', r'Title:\s*([^\n\r]+)', r'Position:\s*([^\n\r]+)'],
+                'website': [r'"website":\s*"([^"]*)"', r'Website:\s*([^\s\n\r]+)'],
+                'address': [r'"address":\s*"([^"]*)"', r'Address:\s*([^\n\r]+)'],
+            }
+            
+            for field, pattern_list in patterns.items():
+                for pattern in pattern_list:
+                    match = re.search(pattern, response_text, re.IGNORECASE)
+                    if match:
+                        fallback_data[field] = match.group(1).strip()
+                        break
+            
+            # Only return if we found at least one meaningful field
+            if any(fallback_data.get(field) for field in ['name', 'email', 'company']):
+                fallback_data['success'] = True
+                fallback_data['notes'] = 'Extracted using fallback method due to JSON parsing error'
+                fallback_data['needs_review'] = True
+                return fallback_data
+            
+        except Exception as e:
+            logger.error(f"Fallback extraction failed: {e}")
+        
+        return None
+    
     def _normalize_extracted_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize and validate extracted data structure"""
         normalized = {
+            'success': True,
             'name': '',
             'first_name': '',
             'last_name': '',
@@ -460,6 +569,9 @@ Combine information from both sides intelligently. The front side typically has 
     def _get_error_response(self, error_message: str) -> Dict[str, Any]:
         """Get standardized error response"""
         return {
+            'success': False,
+            'error': error_message,
+            'data': {},
             'name': '',
             'email': '',
             'mobile': '',
@@ -471,8 +583,7 @@ Combine information from both sides intelligently. The front side typically has 
             'scan_confidence': 0.0,
             'scan_method': 'gemini_error',
             'processing_time': 0.0,
-            'needs_review': True,
-            'error': error_message
+            'needs_review': True
         }
 
 # Global instance

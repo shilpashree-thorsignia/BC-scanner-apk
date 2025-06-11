@@ -11,6 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
+from django.contrib.auth.hashers import check_password
 from .models import BusinessCard, UserProfile, EmailConfig
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
 import logging
@@ -33,6 +34,14 @@ logger = logging.getLogger(__name__)
 GEMINI_AI_AVAILABLE = False
 gemini_ocr = None
 gemini_analyzer = None
+
+# Email imports
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from email.utils import formataddr
+import ssl
 
 def initialize_gemini_ai():
     """Initialize Gemini AI at runtime"""
@@ -256,24 +265,30 @@ class UserRegistrationView(APIView):
             print(f"📝 Registration request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
             print(f"📋 Registration data: {dict(request.data)}")
             
-            user = UserProfile.objects.create(
-                first_name=request.data.get('first_name', ''),
-                last_name=request.data.get('last_name', ''),
-                email=request.data.get('email'),
-                phone=request.data.get('phone', ''),
-                password=request.data.get('password', '')
-            )
+            # Use the proper serializer for validation and user creation
+            serializer = UserProfileSerializer(data=request.data)
             
-            print(f"✅ User created successfully: {user.email}")
-            
-            return Response({
-                'id': user.id,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'phone': user.phone
-            }, status=status.HTTP_201_CREATED)
-            
+            if serializer.is_valid():
+                # Save the user using the serializer (this will hash the password)
+                user = serializer.save()
+                
+                print(f"✅ User created successfully: {user.email}")
+                
+                return Response({
+                    'id': user.id,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'phone': user.phone,
+                    'message': 'User registered successfully'
+                }, status=status.HTTP_201_CREATED)
+            else:
+                print(f"❌ Registration validation errors: {serializer.errors}")
+                return Response({
+                    'error': 'Validation failed',
+                    'validation_errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
             print(f"❌ Registration error: {str(e)}")
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -307,7 +322,7 @@ class UserLoginView(APIView):
         
         try:
             user = UserProfile.objects.get(email=email)
-            if user.password == password:
+            if check_password(password, user.password):
                 print(f"✅ Login successful for user: {email}")
                 return Response({
                     'id': user.id,
@@ -334,6 +349,39 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
         # Note: BusinessCard model doesn't have user_id field
         # TODO: Add user relationship to BusinessCard model in future migration
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        """Override create to add email notifications for manually created business cards"""
+        try:
+            serializer = self.get_serializer(data=request.data)
+            if serializer.is_valid():
+                business_card = serializer.save()
+                
+                # Send automated email notification if enabled
+                try:
+                    email_result = EmailService.send_business_card_notification(business_card)
+                    if email_result['success']:
+                        print(f"✅ Email notification sent: {email_result['message']}")
+                    else:
+                        print(f"⚠️ Email notification failed: {email_result['message']}")
+                except Exception as e:
+                    print(f"❌ Error sending email notification: {e}")
+                
+                headers = self.get_success_headers(serializer.data)
+                return Response({
+                    'message': 'Business card created successfully!',
+                    'business_card': serializer.data
+                }, status=status.HTTP_201_CREATED, headers=headers)
+            else:
+                return Response({
+                    'error': 'Validation failed',
+                    'validation_errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Exception as e:
+            return Response({
+                'error': f'Error creating business card: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def destroy(self, request, *args, **kwargs):
         """Override destroy to perform soft delete and return JSON response"""
@@ -461,11 +509,23 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
             serializer = BusinessCardSerializer(data=parsed_data)
             if serializer.is_valid():
                 business_card = serializer.save()
-                print(f"✅ Business card saved successfully: {business_card.id}")
+                
+                # Send automated email notification if enabled
+                try:
+                    email_result = EmailService.send_business_card_notification(business_card)
+                    if email_result['success']:
+                        print(f"✅ Email notification sent: {email_result['message']}")
+                    else:
+                        print(f"⚠️ Email notification failed: {email_result['message']}")
+                except Exception as e:
+                    print(f"❌ Error sending email notification: {e}")
+                
                 return Response({
-                    'message': 'Business card scanned successfully',
+                    'message': 'Business card scanned and saved successfully!',
                     'business_card': BusinessCardSerializer(business_card).data,
-                    'extraction_details': result
+                    'extracted_info': parsed_data,
+                    'processing_time': f"{result['processing_time']:.2f}s",
+                    'scan_method': 'single_image_ocr'
                 }, status=status.HTTP_201_CREATED)
             else:
                 print(f"❌ Serializer validation failed: {serializer.errors}")
@@ -776,6 +836,16 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                     print(f"⚠️ Could not save images: {image_error}")
                     # Continue without images - the text data is still saved
                 
+                # Send automated email notification if enabled
+                try:
+                    email_result = EmailService.send_business_card_notification(business_card)
+                    if email_result['success']:
+                        print(f"✅ Email notification sent: {email_result['message']}")
+                    else:
+                        print(f"⚠️ Email notification failed: {email_result['message']}")
+                except Exception as e:
+                    print(f"❌ Error sending email notification: {e}")
+                
                 # Create a clean response with serialized business card data
                 response_data = BusinessCardSerializer(business_card).data
                 
@@ -1052,4 +1122,391 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
 class EmailConfigViewSet(viewsets.ModelViewSet):
     queryset = EmailConfig.objects.all()
     serializer_class = EmailConfigSerializer
-    permission_classes = [AllowAny] 
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = EmailConfig.objects.all()
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        """Get the email configuration (return first one if exists)"""
+        try:
+            config = EmailConfig.objects.first()
+            if config:
+                serializer = self.get_serializer(config)
+                return Response(serializer.data)
+            else:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(
+                {'error': f'Error retrieving email configuration: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def create(self, request, *args, **kwargs):
+        """Create email configuration (only allow one)"""
+        try:
+            # Check if configuration already exists
+            if EmailConfig.objects.exists():
+                return Response(
+                    {'error': 'Email configuration already exists. Use PUT to update.'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            headers = self.get_success_headers(serializer.data)
+            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        except Exception as e:
+            return Response(
+                {'error': f'Error creating email configuration: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def perform_update(self, serializer):
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_enabled = False
+        instance.save()
+        return Response({'message': 'Email configuration disabled'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['POST'])
+    def test(self, request, pk=None):
+        """Test email configuration by sending a test email"""
+        try:
+            config = self.get_object()
+            
+            if not config.is_enabled:
+                return Response(
+                    {'success': False, 'message': 'Email notifications are disabled'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Send test email
+            subject = "✅ Business Card Scanner - Test Email"
+            message = """🎉 Congratulations! Your email configuration is working correctly.
+
+This is a test email to verify that your Business Card Scanner app can successfully send automated notifications.
+
+📧 Email Configuration Details:
+• SMTP Server: {smtp_host}:{smtp_port}
+• From: {sender_email}
+• To: {recipient_email}
+
+If you received this email, your automated business card notifications are now active!
+
+Best regards,
+Business Card Scanner App""".format(
+                smtp_host=config.smtp_host,
+                smtp_port=config.smtp_port,
+                sender_email=config.sender_email,
+                recipient_email=config.recipient_email
+            )
+            
+            result = EmailService.send_email(
+                config=config,
+                subject=subject,
+                message=message
+            )
+            
+            if result['success']:
+                return Response({
+                    'success': True,
+                    'message': f"Test email sent successfully to {config.recipient_email}!"
+                })
+            else:
+                return Response({
+                    'success': False,
+                    'message': result['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Error sending test email: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['POST'])
+    def send_email(self, request):
+        """Send an email using the email configuration"""
+        try:
+            config = EmailConfig.objects.filter(is_enabled=True).first()
+            
+            if not config:
+                return Response(
+                    {'error': 'No enabled email configuration found'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            subject = request.data.get('subject')
+            message = request.data.get('message')
+            recipient_email = request.data.get('recipient_email')
+            business_card_id = request.data.get('business_card_id')
+            
+            if not subject or not message:
+                return Response(
+                    {'error': 'Subject and message are required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            business_card = None
+            if business_card_id:
+                try:
+                    business_card = BusinessCard.objects.get(id=business_card_id)
+                except BusinessCard.DoesNotExist:
+                    return Response(
+                        {'error': 'Business card not found'}, 
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            
+            result = EmailService.send_email(
+                config=config,
+                subject=subject,
+                message=message,
+                recipient_email=recipient_email,
+                business_card=business_card
+            )
+            
+            return Response(result)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error sending email: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['POST'])
+    def send_business_card_notification(self, request):
+        """Send an automated follow-up email to the business card owner"""
+        try:
+            business_card_id = request.data.get('business_card_id')
+            
+            if not business_card_id:
+                return Response(
+                    {'error': 'Business card ID is required'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            try:
+                business_card = BusinessCard.objects.get(id=business_card_id)
+            except BusinessCard.DoesNotExist:
+                return Response(
+                    {'error': 'Business card not found'}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            result = EmailService.send_business_card_notification(business_card)
+            
+            return Response(result)
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error sending business card notification: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class EmailService:
+    """Service class for sending emails using SMTP"""
+    
+    @staticmethod
+    def send_email(config, subject, message, recipient_email=None, business_card=None):
+        """
+        Send email using the provided configuration
+        
+        Args:
+            config: EmailConfig object
+            subject: Email subject
+            message: Email message body
+            recipient_email: Override recipient email (optional)
+            business_card: BusinessCard object for attachments (optional)
+        
+        Returns:
+            dict: {'success': bool, 'message': str}
+        """
+        try:
+            if not config.is_enabled:
+                return {'success': False, 'message': 'Email notifications are disabled'}
+            
+            # Use provided recipient or default from config
+            to_email = recipient_email or config.recipient_email
+            
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['From'] = formataddr(('Business Card Scanner', config.sender_email))
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            # Create HTML and plain text versions
+            text_content = message
+            html_content = f"""
+            <html>
+              <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                  <h2 style="color: #2563eb; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
+                    Business Card Scanner Notification
+                  </h2>
+                  <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    {message.replace('\n', '<br>')}
+                  </div>
+                  
+                  {EmailService._format_business_card_html(business_card) if business_card else ''}
+                  
+                  <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
+                    <p>This is an automated message from your Business Card Scanner App.</p>
+                    <p>Time: {EmailService._get_formatted_datetime()}</p>
+                  </div>
+                </div>
+              </body>
+            </html>
+            """
+            
+            # Attach both versions
+            msg.attach(MIMEText(text_content, 'plain'))
+            msg.attach(MIMEText(html_content, 'html'))
+            
+            # Attach business card image if available
+            if business_card and business_card.image:
+                try:
+                    with open(business_card.image.path, 'rb') as f:
+                        img_data = f.read()
+                    img = MIMEImage(img_data)
+                    img.add_header('Content-Disposition', 'attachment', filename=f'business_card_{business_card.id}.jpg')
+                    msg.attach(img)
+                except Exception as e:
+                    print(f"⚠️ Could not attach business card image: {e}")
+            
+            # Send email
+            smtp_port = int(config.smtp_port)
+            
+            # Create SSL context
+            context = ssl.create_default_context()
+            
+            with smtplib.SMTP(config.smtp_host, smtp_port) as server:
+                server.starttls(context=context)  # Enable security
+                server.login(config.sender_email, config.sender_password)
+                server.send_message(msg)
+            
+            return {
+                'success': True, 
+                'message': f'Email sent successfully to {to_email}'
+            }
+            
+        except smtplib.SMTPAuthenticationError as e:
+            return {
+                'success': False,
+                'message': f'Authentication failed. Please check your email and password. Error: {str(e)}'
+            }
+        except smtplib.SMTPConnectError as e:
+            return {
+                'success': False,
+                'message': f'Could not connect to SMTP server. Please check your SMTP settings. Error: {str(e)}'
+            }
+        except smtplib.SMTPException as e:
+            return {
+                'success': False,
+                'message': f'SMTP error occurred: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'Failed to send email: {str(e)}'
+            }
+    
+    @staticmethod
+    def _format_business_card_html(business_card):
+        """Format business card data as HTML"""
+        if not business_card:
+            return ""
+        
+        return f"""
+        <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: #1f2937; margin-top: 0;">📋 Business Card Details</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Name:</td><td style="padding: 5px 0;">{business_card.name or 'N/A'}</td></tr>
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Company:</td><td style="padding: 5px 0;">{business_card.company or 'N/A'}</td></tr>
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Job Title:</td><td style="padding: 5px 0;">{business_card.job_title or 'N/A'}</td></tr>
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Email:</td><td style="padding: 5px 0;">{business_card.email or 'N/A'}</td></tr>
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Mobile:</td><td style="padding: 5px 0;">{business_card.mobile or 'N/A'}</td></tr>
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Website:</td><td style="padding: 5px 0;">{business_card.website or 'N/A'}</td></tr>
+            <tr><td style="padding: 5px 0; font-weight: bold; color: #374151;">Address:</td><td style="padding: 5px 0;">{business_card.address or 'N/A'}</td></tr>
+          </table>
+        </div>
+        """
+    
+    @staticmethod
+    def _get_formatted_datetime():
+        """Get formatted current datetime"""
+        from django.utils import timezone
+        return timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    @staticmethod
+    def send_business_card_notification(business_card):
+        """
+        Send automated follow-up email to the business card owner
+        
+        Args:
+            business_card: BusinessCard object
+            
+        Returns:
+            dict: {'success': bool, 'message': str}
+        """
+        try:
+            # Get email configuration
+            config = EmailConfig.objects.filter(is_enabled=True).first()
+            
+            if not config:
+                return {'success': False, 'message': 'No email configuration found or email is disabled'}
+            
+            # Check if business card has an email address
+            if not business_card.email:
+                return {'success': False, 'message': f'No email address found for {business_card.name}. Cannot send follow-up email.'}
+            
+            # Create follow-up email content
+            subject = f"Nice meeting you, {business_card.name}!"
+            
+            # Create personalized follow-up message
+            message = f"""Hello {business_card.name},
+
+It was great meeting you! I've added your contact information to my network.
+
+Your details I have on file:
+• Name: {business_card.name}
+• Company: {business_card.company or 'Not specified'}
+• Position: {business_card.job_title or 'Not specified'}
+• Phone: {business_card.mobile or 'Not specified'}
+
+I look forward to staying in touch and exploring potential opportunities for collaboration.
+
+Best regards,
+{config.sender_email.split('@')[0].title()}
+
+---
+This is an automated message sent from our Business Card Scanner system.
+If you received this in error, please disregard this message."""
+            
+            # Send email TO the business card owner (not to a fixed recipient)
+            return EmailService.send_email(
+                config=config,
+                subject=subject,
+                message=message,
+                recipient_email=business_card.email,  # Send TO the card owner
+                business_card=business_card
+            )
+            
+        except Exception as e:
+            return {'success': False, 'message': f'Error sending follow-up email: {str(e)}'} 

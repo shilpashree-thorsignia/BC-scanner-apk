@@ -22,6 +22,8 @@ export interface EmailConfig {
   is_enabled: boolean;
   sender_email: string;
   sender_password: string;
+  sender_password_saved: boolean;     // Indicates if password is saved
+  sender_password_masked: string;     // Masked password for display
   recipient_email: string;
   smtp_host: string;
   smtp_port: string;
@@ -170,17 +172,19 @@ export const scanBusinessCardDualSide = async (frontImageUri: string, backImageU
 
 export const createBusinessCard = async (data: CreateCardData): Promise<BusinessCard> => {
   try {
-    // Format data for backend (create endpoint uses camelCase jobTitle)
+    // Format data for backend (backend expects snake_case field names)
     const formattedData = {
       name: data.name || '',
       email: data.email || null,
       mobile: data.mobile || null,
       company: data.company || null,
-      jobTitle: data.jobTitle || null, // Keep camelCase for create endpoint
+      job_title: data.jobTitle || null, // Convert camelCase to snake_case
       website: data.website || null,
       address: data.address || null,
       notes: data.notes || null,
     };
+
+    console.log('🚀 Attempting to create business card with data:', formattedData);
 
     const response = await fetch(`${API_BASE_URL}/business-cards/`, {
       method: 'POST',
@@ -191,12 +195,26 @@ export const createBusinessCard = async (data: CreateCardData): Promise<Business
       body: JSON.stringify(formattedData),
     });
 
+    console.log('📊 Response status:', response.status);
+
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create business card');
+      console.error('❌ Error response:', errorData);
+      
+      // Extract detailed validation errors if available
+      if (errorData.validation_errors) {
+        const validationMessages = Object.entries(errorData.validation_errors)
+          .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+          .join('\n');
+        throw new Error(`Validation failed:\n${validationMessages}`);
+      }
+      
+      throw new Error(errorData.error || errorData.message || 'Failed to create business card');
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('✅ Success response:', result);
+    return result.business_card || result; // Handle both response formats
   } catch (error) {
     console.error('Error creating business card:', error);
     throw error;

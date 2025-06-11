@@ -14,7 +14,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config';
 
 const SignUpScreen = () => {
   const { signUp } = useAuth();
@@ -44,26 +43,16 @@ const SignUpScreen = () => {
       setLoading(true);
       console.log('Sending signup request...');
       
-      const response = await fetch(`${API_BASE_URL}/register/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-          email: formData.email,
-          phone: formData.phone || '',
-          password: formData.password
-        }),
+      // Use the AuthContext signUp function instead of direct API call
+      const result = await signUp({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone || '',
+        password: formData.password
       });
 
-      const data = await response.json();
-      console.log('Signup response:', data);
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Sign up failed');
-      }
+      console.log('Signup successful:', result);
       
       // Show success message and navigate back to login
       Alert.alert(

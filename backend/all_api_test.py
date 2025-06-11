@@ -1,18 +1,13 @@
 from rest_framework import serializers
 from .models import BusinessCard, UserProfile, EmailConfig
+from django.conf import settings
 from django.contrib.auth.hashers import make_password
-from django.core.validators import URLValidator
 import re
 
 class BusinessCardSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     image_front_url = serializers.SerializerMethodField()
     image_back_url = serializers.SerializerMethodField()
-    
-    # Override website fields to use CharField instead of URLField
-    # This allows our custom validation to handle URL formatting
-    website = serializers.CharField(max_length=200, required=False, allow_blank=True)
-    website_secondary = serializers.CharField(max_length=200, required=False, allow_blank=True)
 
     class Meta:
         model = BusinessCard
@@ -89,62 +84,27 @@ class BusinessCardSerializer(serializers.ModelSerializer):
         website = value.strip()
         print(f"🌐 Website validation input: '{website}'")
         
-        # If it's already a valid URL, validate and return
+        # If it's already a valid URL, return as is
         if website.startswith(('http://', 'https://')):
             print(f"🌐 Website already has protocol: '{website}'")
-            # Validate the URL format
-            validator = URLValidator()
-            try:
-                validator(website)
-                return website
-            except:
-                # If validation fails, try to fix common issues
-                pass
+            return website
         
         # If it starts with www., add https://
         if website.startswith('www.'):
             result = f'https://{website}'
             print(f"🌐 Added https to www: '{result}'")
-            # Validate the constructed URL
-            validator = URLValidator()
-            try:
-                validator(result)
-                return result
-            except:
-                print(f"🌐 Invalid URL after adding https: '{result}'")
-                # If still invalid, try without www
-                pass
+            return result
         
-        # If it looks like a domain (contains a dot), try different formats
+        # If it looks like a domain (contains a dot), add https://www.
         if '.' in website and not website.startswith(('http://', 'https://', 'www.')):
-            # Try various combinations
-            formats_to_try = [
-                f'https://{website}',
-                f'https://www.{website}',
-                f'http://{website}',
-                f'http://www.{website}'
-            ]
-            
-            validator = URLValidator()
-            
-            for url_format in formats_to_try:
-                try:
-                    validator(url_format)
-                    print(f"🌐 Valid URL format found: '{url_format}'")
-                    return url_format
-                except:
-                    continue
-            
-            print(f"🌐 No valid URL format found for: '{website}'")
+            result = f'https://www.{website}'
+            print(f"🌐 Added https://www to domain: '{result}'")
+            return result
         
-        # If none of the formats work, return empty string to avoid validation error
-        # This allows the user to save the card without the website field
-        print(f"🌐 Website validation failed, returning empty string for: '{website}'")
-        return ''
-    
-    def validate_website_secondary(self, value):
-        """Validate and normalize secondary website URL using same logic as primary website"""
-        return self.validate_website(value)
+        # If it doesn't look like a URL, just return the original value for now
+        # (instead of empty string to see if that's causing issues)
+        print(f"🌐 Website doesn't look like URL, returning as-is: '{website}'")
+        return website
     
     def get_image_url(self, obj):
         if obj.image:

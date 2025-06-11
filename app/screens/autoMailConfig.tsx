@@ -71,7 +71,15 @@ export default function AutoMailConfigScreen() {
         setConfigId(config.id);
         setIsEnabled(config.is_enabled);
         setSenderEmail(config.sender_email);
-        setSenderPassword(config.sender_password);
+        
+        // Only clear password if no password is saved
+        // If password is saved, show masked version as placeholder
+        if (config.sender_password_saved) {
+          setSenderPassword(config.sender_password_masked || '••••••••••••••••');
+        } else {
+          setSenderPassword('');
+        }
+        
         setRecipientEmail(config.recipient_email);
         setSmtpHost(config.smtp_host);
         setSmtpPort(config.smtp_port);
@@ -96,16 +104,20 @@ export default function AutoMailConfigScreen() {
       
       if (isEnabled) {
         // Validate required fields
-        if (!senderEmail || !senderPassword || !recipientEmail) {
+        const isMaskedPassword = senderPassword === '••••••••••••••••' || senderPassword.includes('•');
+        
+        if (!senderEmail || (!senderPassword && !isMaskedPassword) || !recipientEmail) {
           Alert.alert('Missing Information', 'Please fill in all required fields.');
           return;
         }
       }
       
-      const configData: CreateEmailConfigData = {
+      // Check if password is masked (not changed by user)
+      const isMaskedPassword = senderPassword === '••••••••••••••••' || senderPassword.includes('•');
+      
+      const configData: CreateEmailConfigData | Partial<CreateEmailConfigData> = {
         is_enabled: isEnabled,
         sender_email: senderEmail,
-        sender_password: senderPassword,
         recipient_email: recipientEmail,
         smtp_host: smtpHost,
         smtp_port: smtpPort,
@@ -113,18 +125,27 @@ export default function AutoMailConfigScreen() {
         email_template: emailTemplate,
       };
 
+      // Only include password if it's not masked (user changed it)
+      if (!isMaskedPassword || !configId) {
+        configData.sender_password = senderPassword;
+      }
+
       let savedConfig: EmailConfig;
       
       if (configId) {
         // Update existing configuration
-        savedConfig = await updateEmailConfig(configId, configData);
+        savedConfig = await updateEmailConfig(configId, configData as CreateEmailConfigData);
       } else {
         // Create new configuration
-        savedConfig = await createEmailConfig(configData);
+        savedConfig = await createEmailConfig(configData as CreateEmailConfigData);
         setConfigId(savedConfig.id);
       }
       
       Alert.alert('Success', 'Email configuration saved successfully!');
+      
+      // Reload config to show masked password
+      await loadEmailConfig();
+      
     } catch (error) {
       console.error('Error saving email configuration:', error);
       Alert.alert('Error', 'Failed to save email configuration. Please try again.');
