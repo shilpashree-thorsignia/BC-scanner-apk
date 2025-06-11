@@ -128,6 +128,102 @@ Rules:
             class SimpleGeminiOCR:
                 def extract_business_card_info(self, image_data):
                     return simple_gemini_ocr(image_data)
+                
+                def extract_from_dual_images(self, front_image, back_image):
+                    """Extract from both sides of business card"""
+                    try:
+                        import google.generativeai as genai
+                        import json
+                        
+                        # Create model
+                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        
+                        dual_prompt = """Analyze BOTH SIDES of this business card and extract ALL information as JSON:
+
+{
+  "name": "",
+  "first_name": "",
+  "last_name": "",
+  "email": "",
+  "email_secondary": "",
+  "mobile": "",
+  "mobile_secondary": "",
+  "landline": "",
+  "fax": "",
+  "company": "",
+  "job_title": "",
+  "website": "",
+  "website_secondary": "",
+  "linkedin": "",
+  "twitter": "",
+  "facebook": "",
+  "instagram": "",
+  "address": "",
+  "industry": "",
+  "services": "",
+  "specialization": "",
+  "certifications": "",
+  "awards": "",
+  "primary_language": "",
+  "notes": "",
+  "scan_confidence": 95
+}
+
+FRONT SIDE: Analyze the first image (front side)
+BACK SIDE: Analyze the second image (back side)
+
+Rules:
+- Combine information from both sides intelligently
+- Extract social media handles, certifications, additional services
+- Look for QR codes, logos, additional contact info on back
+- Empty string if not found
+- For websites: add https:// if missing
+- Return JSON only, no explanation"""
+                        
+                        response = model.generate_content([dual_prompt, front_image, back_image])
+                        
+                        if response and response.text:
+                            response_text = response.text.strip()
+                            
+                            # Clean response
+                            if response_text.startswith('```json'):
+                                response_text = response_text.replace('```json', '').replace('```', '').strip()
+                            elif response_text.startswith('```'):
+                                response_text = response_text.replace('```', '').strip()
+                            
+                            try:
+                                data = json.loads(response_text)
+                                return {
+                                    'success': True,
+                                    'data': data,
+                                    'scan_method': 'simple_gemini_dual_side',
+                                    'processing_time': 4.0,
+                                    'metadata': {
+                                        'side_analyzed': 'both',
+                                        'confidence_score': data.get('scan_confidence', 95)
+                                    }
+                                }
+                            except json.JSONDecodeError as e:
+                                return {
+                                    'success': False,
+                                    'error': f'Failed to parse JSON response: {str(e)}',
+                                    'data': {},
+                                    'processing_time': 4.0
+                                }
+                        else:
+                            return {
+                                'success': False,
+                                'error': 'No response from Gemini AI for dual-side scan',
+                                'data': {},
+                                'processing_time': 4.0
+                            }
+                    except Exception as e:
+                        return {
+                            'success': False,
+                            'error': f'Dual-side extraction failed: {str(e)}',
+                            'data': {},
+                            'processing_time': 4.0
+                        }
             
             gemini_ocr = SimpleGeminiOCR()
             GEMINI_AI_AVAILABLE = True
@@ -477,6 +573,234 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f'Error processing QR code: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['POST'])
+    def scan_card_dual_side(self, request):
+        """Scan both sides of a business card using Gemini AI OCR"""
+        try:
+            print(f"🔍 Dual-side scan card request received")
+            print(f"📁 Files in request: {list(request.FILES.keys())}")
+            print(f"📋 Data in request: {dict(request.data)}")
+            
+            # Check for both front and back images
+            front_image_file = None
+            back_image_file = None
+            
+            if 'front_image' in request.FILES:
+                front_image_file = request.FILES['front_image']
+                print(f"📷 Found front image: {front_image_file.name}, Size: {front_image_file.size} bytes")
+            
+            if 'back_image' in request.FILES:
+                back_image_file = request.FILES['back_image']
+                print(f"📷 Found back image: {back_image_file.name}, Size: {back_image_file.size} bytes")
+            
+            # Validate that we have both images
+            if not front_image_file or not back_image_file:
+                return Response({
+                    'error': 'Both front_image and back_image files are required for dual-side scanning.',
+                    'available_fields': list(request.FILES.keys()),
+                    'help': 'Send both images as multipart form-data with field names "front_image" and "back_image"'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            user_id = request.data.get('user_id')
+            
+            print(f"👤 User ID: {user_id}")
+            print(f"🤖 Gemini AI Available: {GEMINI_AI_AVAILABLE}")
+            print(f"🔧 Gemini OCR Instance: {gemini_ocr is not None}")
+            
+            # Try to initialize Gemini AI if not available
+            if not GEMINI_AI_AVAILABLE or not gemini_ocr:
+                print("🔄 Attempting to initialize Gemini AI...")
+                if not initialize_gemini_ai():
+                    error_msg = f'Gemini AI OCR not available. Available: {GEMINI_AI_AVAILABLE}, Instance: {gemini_ocr is not None}'
+                    print(f"❌ {error_msg}")
+                    return Response({
+                        'error': error_msg
+                    }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                else:
+                    print("✅ Gemini AI initialized successfully at runtime")
+            
+            # Process images using PIL
+            from PIL import Image as PILImage
+            import io
+            
+            # Read and process front image
+            front_image_data = front_image_file.read()
+            front_image = PILImage.open(io.BytesIO(front_image_data))
+            
+            # Read and process back image
+            back_image_data = back_image_file.read()
+            back_image = PILImage.open(io.BytesIO(back_image_data))
+            
+            print(f"📊 Front image size: {len(front_image_data)} bytes")
+            print(f"📊 Back image size: {len(back_image_data)} bytes")
+            
+            # Extract business card info using dual-side Gemini AI
+            print("🚀 Starting dual-side Gemini AI extraction...")
+            result = gemini_ocr.extract_from_dual_images(front_image, back_image)
+            print(f"📋 Dual-side Gemini AI result: {result}")
+            
+            if not result.get('success', False):
+                error_msg = result.get('error', 'Failed to extract business card information from both sides')
+                print(f"❌ Gemini AI dual-side extraction failed: {error_msg}")
+                return Response({
+                    'error': error_msg,
+                    'details': result
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get the extracted data
+            parsed_data = result['data'] if 'data' in result else result
+            
+            # Map the comprehensive data to our business card fields
+            mapped_data = {
+                # Personal Information
+                'name': parsed_data.get('name', '') or f"{parsed_data.get('first_name', '')} {parsed_data.get('last_name', '')}".strip(),
+                'first_name': parsed_data.get('first_name', ''),
+                'last_name': parsed_data.get('last_name', ''),
+                'middle_name': parsed_data.get('middle_name', ''),
+                
+                # Contact Information
+                'email': parsed_data.get('email', ''),
+                'email_secondary': parsed_data.get('email_secondary', ''),
+                'mobile': parsed_data.get('mobile', ''),
+                'mobile_secondary': parsed_data.get('mobile_secondary', ''),
+                'landline': parsed_data.get('landline', ''),
+                'fax': parsed_data.get('fax', ''),
+                
+                # Company Information
+                'company': parsed_data.get('company', ''),
+                'company_full_name': parsed_data.get('company_full_name', ''),
+                'department': parsed_data.get('department', ''),
+                'job_title': parsed_data.get('job_title', ''),
+                'job_title_secondary': parsed_data.get('job_title_secondary', ''),
+                
+                # Digital Presence
+                'website': parsed_data.get('website', ''),
+                'website_secondary': parsed_data.get('website_secondary', ''),
+                'linkedin': parsed_data.get('linkedin', ''),
+                'twitter': parsed_data.get('twitter', ''),
+                'facebook': parsed_data.get('facebook', ''),
+                'instagram': parsed_data.get('instagram', ''),
+                'skype': parsed_data.get('skype', ''),
+                
+                # Address Information
+                'address': parsed_data.get('address', ''),
+                'street_address': parsed_data.get('street_address', ''),
+                'city': parsed_data.get('city', ''),
+                'state': parsed_data.get('state', ''),
+                'postal_code': parsed_data.get('postal_code', ''),
+                'country': parsed_data.get('country', ''),
+                
+                # Business Information
+                'industry': parsed_data.get('industry', ''),
+                'services': parsed_data.get('services', ''),
+                'specialization': parsed_data.get('specialization', ''),
+                'certifications': parsed_data.get('certifications', ''),
+                'awards': parsed_data.get('awards', ''),
+                
+                # QR Code and Languages
+                'qr_code_data': parsed_data.get('qr_code_data', ''),
+                'primary_language': parsed_data.get('primary_language', ''),
+                'secondary_language': parsed_data.get('secondary_language', ''),
+                'timezone': parsed_data.get('timezone', ''),
+                
+                # Metadata
+                'notes': self._build_notes_from_dual_scan(parsed_data),
+                'type': 'dual_side',
+                'scan_confidence': parsed_data.get('scan_confidence', 0),
+                'scan_method': result.get('scan_method', 'gemini_dual_side'),
+                'processing_time': result.get('processing_time', 0),
+                
+                # Images
+                'image_front': front_image,
+                'image_back': back_image,
+            }
+            
+            # Normalize website URL if present
+            if mapped_data.get('website') and not mapped_data['website'].startswith(('http://', 'https://')):
+                website = mapped_data['website'].strip()
+                if website.startswith('www.'):
+                    mapped_data['website'] = f'https://{website}'
+                elif '.' in website:
+                    mapped_data['website'] = f'https://www.{website}'
+            
+            # Add user_id if provided
+            if user_id:
+                mapped_data['user_id'] = user_id
+            
+            # Save the business card
+            serializer = BusinessCardSerializer(data=mapped_data)
+            if serializer.is_valid():
+                business_card = serializer.save()
+                print(f"✅ Dual-side business card saved successfully: {business_card.id}")
+                return Response({
+                    'message': 'Dual-side business card scanned successfully',
+                    'scan_type': 'dual_side',
+                    'confidence_score': parsed_data.get('scan_confidence', 95),
+                    'processing_time': parsed_data.get('processing_time', 0),
+                    'business_card': BusinessCardSerializer(business_card).data,
+                    'extraction_details': result
+                }, status=status.HTTP_201_CREATED)
+            else:
+                print(f"❌ Serializer validation failed: {serializer.errors}")
+                return Response({
+                    'message': 'Dual-side OCR successful but validation failed',
+                    'extracted_data': mapped_data,
+                    'validation_errors': serializer.errors
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            error_msg = f"Error processing dual-side business card: {str(e)}"
+            print(f"❌ {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'error': error_msg
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _build_notes_from_dual_scan(self, parsed_data):
+        """Build comprehensive notes from dual-side scan data"""
+        notes_parts = []
+        
+        # Add additional contact info
+        if parsed_data.get('fax'):
+            notes_parts.append(f"Fax: {parsed_data['fax']}")
+        
+        # Add social media
+        social_media = []
+        if parsed_data.get('linkedin'):
+            social_media.append(f"LinkedIn: {parsed_data['linkedin']}")
+        if parsed_data.get('twitter'):
+            social_media.append(f"Twitter: {parsed_data['twitter']}")
+        if parsed_data.get('facebook'):
+            social_media.append(f"Facebook: {parsed_data['facebook']}")
+        if parsed_data.get('instagram'):
+            social_media.append(f"Instagram: {parsed_data['instagram']}")
+        
+        if social_media:
+            notes_parts.append("Social Media: " + ", ".join(social_media))
+        
+        # Add professional info
+        if parsed_data.get('industry'):
+            notes_parts.append(f"Industry: {parsed_data['industry']}")
+        if parsed_data.get('specialization'):
+            notes_parts.append(f"Specialization: {parsed_data['specialization']}")
+        if parsed_data.get('services'):
+            notes_parts.append(f"Services: {parsed_data['services']}")
+        if parsed_data.get('certifications'):
+            notes_parts.append(f"Certifications: {parsed_data['certifications']}")
+        if parsed_data.get('awards'):
+            notes_parts.append(f"Awards: {parsed_data['awards']}")
+        
+        # Add languages
+        if parsed_data.get('primary_language'):
+            notes_parts.append(f"Languages: {parsed_data['primary_language']}")
+        
+        # Add scan metadata
+        if parsed_data.get('scan_confidence'):
+            notes_parts.append(f"Scan Confidence: {parsed_data['scan_confidence']}%")
+        
+        return " | ".join(notes_parts) if notes_parts else ""
+
     def parse_qr_business_card(self, qr_text):
         """Simple QR code parsing"""
         parsed_data = {
@@ -659,6 +983,13 @@ class BusinessCardViewSet(viewsets.ModelViewSet):
                     debug_info['direct_gemini_test'] = 'No API key'
             except Exception as e:
                 debug_info['direct_gemini_test'] = f'Error: {str(e)}'
+            
+            # Check available methods on OCR instance
+            if gemini_ocr:
+                debug_info['available_methods'] = {
+                    'extract_business_card_info': hasattr(gemini_ocr, 'extract_business_card_info'),
+                    'extract_from_dual_images': hasattr(gemini_ocr, 'extract_from_dual_images')
+                }
             
             return Response(debug_info)
             

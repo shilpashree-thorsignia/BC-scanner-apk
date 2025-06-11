@@ -6,27 +6,74 @@ import re
 
 class BusinessCardSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    image_front_url = serializers.SerializerMethodField()
+    image_back_url = serializers.SerializerMethodField()
 
     class Meta:
         model = BusinessCard
         fields = [
             'id', 
             'name', 
+            'first_name',
+            'last_name',
+            'middle_name',
             'email', 
+            'email_secondary',
             'mobile', 
+            'mobile_secondary',
+            'landline',
+            'fax',
             'company',
+            'company_full_name',
+            'department',
             'job_title',
+            'job_title_secondary',
             'website',
+            'website_secondary',
+            'linkedin',
+            'twitter',
+            'facebook',
+            'instagram',
+            'skype',
             'address',
+            'street_address',
+            'city',
+            'state',
+            'postal_code',
+            'country',
+            'industry',
+            'services',
+            'specialization',
+            'certifications',
+            'awards',
             'notes',
+            'tags',
+            'priority',
             'image',
+            'image_front',
+            'image_back',
             'image_url',
+            'image_front_url',
+            'image_back_url',
+            'front_side_text',
+            'back_side_text',
+            'qr_code_data',
+            'qr_code_type',
+            'primary_language',
+            'secondary_language',
+            'timezone',
             'type',
+            'scan_confidence',
+            'scan_method',
+            'processing_time',
+            'is_verified',
+            'needs_review',
             'created_at',
+            'updated_at',
             'is_deleted',
             'deleted_at'
         ]
-        read_only_fields = ('image_url', 'deleted_at')
+        read_only_fields = ('image_url', 'image_front_url', 'image_back_url', 'deleted_at', 'created_at', 'updated_at')
     
     def validate_website(self, value):
         """Validate and normalize website URL"""
@@ -57,6 +104,22 @@ class BusinessCardSerializer(serializers.ModelSerializer):
             if request is not None:
                 return request.build_absolute_uri(obj.image.url)
             return obj.image.url
+        return None
+    
+    def get_image_front_url(self, obj):
+        if obj.image_front:
+            request = self.context.get('request')
+            if request is not None:
+                return request.build_absolute_uri(obj.image_front.url)
+            return obj.image_front.url
+        return None
+    
+    def get_image_back_url(self, obj):
+        if obj.image_back:
+            request = self.context.get('request')
+            if request is not None:
+                return request.build_absolute_uri(obj.image_back.url)
+            return obj.image_back.url
         return None
 
 

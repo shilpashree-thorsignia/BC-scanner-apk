@@ -214,8 +214,24 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     fontWeight: '600',
     zIndex: -1, // optional, pushes it behind the buttons if needed
-  }
-  
+  },
+  controls: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 20,
+    borderRadius: 24,
+    zIndex: 10,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
 });
 
 export default function ScannerScreen() {
@@ -693,35 +709,55 @@ export default function ScannerScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Bottom Action Bar */}
-        <View style={styles.actionBar}>
-          <TouchableOpacity 
-            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={pickImageFromGallery}
-            disabled={processing}
-          >
-            <MaterialIcons name="photo-library" size={iconSize} color="#00A99D" />
-          </TouchableOpacity>
+        {/* Controls */}
+        <View style={styles.controls}>
+          <View style={styles.controlsRow}>
+            {/* Gallery Button */}
+            <TouchableOpacity 
+              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+              onPress={pickImageFromGallery}
+            >
+              <MaterialIcons name="photo-library" size={iconSize} color="#00A99D" />
+            </TouchableOpacity>
+
+            {/* Single-Side Capture Button */}
+            <TouchableOpacity 
+              style={[styles.actionButton, { width: largeButtonSize, height: largeButtonSize }]}
+              onPress={takePicture}
+              disabled={processing}
+            >
+              {processing ? (
+                <ActivityIndicator color="#00A99D" size="small" />
+              ) : (
+                <View style={[styles.innerButton, { width: innerButtonSize, height: innerButtonSize }]} />
+              )}
+            </TouchableOpacity>
+
+            {/* Smart Scan Button */}
+            <TouchableOpacity 
+              style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
+              onPress={smartScan}
+            >
+              <MaterialIcons name="smart-button" size={iconSize} color="#00A99D" />
+            </TouchableOpacity>
+          </View>
           
-          <TouchableOpacity 
-            style={[styles.actionButton, { width: largeButtonSize, height: largeButtonSize }]}
-            onPress={takePicture}
-            disabled={processing}
-          >
-            {processing ? (
-              <ActivityIndicator color="#00A99D" size="small" />
-            ) : (
-              <View style={[styles.innerButton, { width: innerButtonSize, height: innerButtonSize }]} />
-            )}
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, { width: buttonSize, height: buttonSize }]}
-            onPress={smartScan}
-            disabled={processing}
-          >
-            <MaterialIcons name="qr-code-scanner" size={iconSize} color="#00A99D" />
-          </TouchableOpacity>
+          {/* Dual-Side Scan Button */}
+          <View style={{ alignItems: 'center', marginTop: 10 }}>
+            <TouchableOpacity 
+              style={[styles.actionButton, { 
+                width: buttonSize * 2.5, 
+                height: buttonSize * 0.8, 
+                borderRadius: 20,
+                flexDirection: 'row',
+                paddingHorizontal: 12
+              }]}
+              onPress={() => router.push('/screens/DualSideScannerScreen' as any)}
+            >
+              <MaterialIcons name="flip-camera-android" size={iconSize * 0.8} color="#00A99D" />
+              <Text style={[styles.actionButtonText, { marginLeft: 8, fontSize: 14 }]}>Dual-Side Scan</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>

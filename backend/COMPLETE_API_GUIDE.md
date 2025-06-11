@@ -110,6 +110,81 @@ const response = await fetch('http://your-server:8000/api/business-cards/scan_qr
 });
 ```
 
+### POST `/business-cards/scan_card_dual_side/`
+**Dual-side business card scanning with enhanced information extraction**
+
+#### Request Format:
+
+```javascript
+const formData = new FormData();
+
+// Add front side image
+formData.append('front_image', {
+  uri: frontImageUri,
+  type: 'image/jpeg',
+  name: 'front_side.jpg'
+});
+
+// Add back side image
+formData.append('back_image', {
+  uri: backImageUri,
+  type: 'image/jpeg',
+  name: 'back_side.jpg'
+});
+
+formData.append('user_id', '123'); // Optional
+
+const response = await fetch('http://your-server:8000/api/business-cards/scan_card_dual_side/', {
+  method: 'POST',
+  body: formData,
+  headers: {
+    'Content-Type': 'multipart/form-data',
+  },
+});
+```
+
+#### Response:
+```json
+{
+  "message": "Dual-side business card scanned successfully",
+  "scan_type": "dual_side",
+  "confidence_score": 97,
+  "processing_time": "4.2s",
+  "business_card": {
+    "id": 124,
+    "name": "Dr. Sarah Johnson",
+    "company": "MedTech Solutions Inc.",
+    "job_title": "Chief Technology Officer",
+    "email": "sarah.johnson@medtech.com",
+    "mobile": "+1 (555) 987-6543",
+    "website": "https://www.medtech-solutions.com",
+    "address": "456 Innovation Drive, Tech Park, CA 94105",
+    "notes": "Fax: +1 (555) 987-6544 | Social Media: LinkedIn: linkedin.com/in/sarahjohnson, Twitter: @sarahjohnson_cto | Industry: Healthcare Technology | Specialization: AI-Powered Medical Devices | Services: AI Development, Medical Software, Consulting | Languages: English | Scan Confidence: 97%",
+    "type": "dual_side_scan",
+    "created_at": "2025-06-11T10:45:00Z"
+  },
+  "extraction_details": {
+    "success": true,
+    "scan_method": "gemini_dual_side",
+    "processing_time": 4.2,
+    "metadata": {
+      "side_analyzed": "both",
+      "confidence_score": 97,
+      "text_quality": "excellent"
+    }
+  }
+}
+```
+
+#### Features:
+- **Enhanced Data Extraction**: Analyzes both front and back sides for comprehensive information
+- **Social Media Detection**: Extracts LinkedIn, Twitter, Facebook, Instagram profiles
+- **Professional Details**: Captures certifications, awards, specializations, services
+- **Contact Information**: Multiple phone numbers, email addresses, fax numbers
+- **Language Detection**: Identifies primary and secondary languages
+- **Industry Analysis**: Determines business industry and specialization
+- **Higher Accuracy**: Combines information from both sides for better results
+
 ---
 
 ## 📋 **CRUD Operations**
@@ -247,253 +322,3 @@ const response = await fetch('http://your-server:8000/api/business-cards/123/res
   }
 }
 ```
-
-### DELETE `/business-cards/{id}/permanent_delete/`
-**Permanently delete business card (hard delete)**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/business-cards/123/permanent_delete/', {
-  method: 'DELETE',
-});
-```
-
-**Response:**
-```json
-{
-  "message": "Business card \"John Smith\" permanently deleted",
-  "deleted_id": 123
-}
-```
-
-### POST `/business-cards/empty_trash/`
-**Empty entire trash (permanently delete all deleted items)**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/business-cards/empty_trash/', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    user_id: '123' // Optional: empty trash for specific user
-  }),
-});
-```
-
-**Response:**
-```json
-{
-  "message": "Trash emptied successfully. 5 items permanently deleted.",
-  "deleted_count": 5
-}
-```
-
----
-
-## 👤 **User Management**
-
-### POST `/users/register/`
-**User registration**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/users/register/', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    first_name: "John",
-    last_name: "Smith",
-    email: "john@example.com",
-    phone: "+1-555-123-4567",
-    password: "securepassword"
-  }),
-});
-```
-
-### POST `/users/login/`
-**User authentication**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/users/login/', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    email: "john@example.com",
-    password: "securepassword"
-  }),
-});
-```
-
-### GET `/users/{id}/`
-**Get user details**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/users/123/');
-```
-
----
-
-## 🔧 **Email Configuration**
-
-### GET `/email-config/`
-**Get email configuration**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/email-config/');
-```
-
-### POST `/email-config/`
-**Create/update email configuration**
-
-```javascript
-const response = await fetch('http://your-server:8000/api/email-config/', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    is_enabled: true,
-    sender_email: "notifications@yourapp.com",
-    sender_password: "app_password",
-    recipient_email: "user@example.com",
-    smtp_host: "smtp.gmail.com",
-    smtp_port: "587",
-    email_subject: "New Business Card Scanned",
-    email_template: "A new business card has been added to your collection."
-  }),
-});
-```
-
----
-
-## 🐛 **Debugging & Error Handling**
-
-### Common Error Responses:
-
-**400 Bad Request - No Image:**
-```json
-{
-  "error": "No image file provided. Expected 'image' field in multipart form or base64 string.",
-  "available_fields": ["user_id"],
-  "help": "Send image as multipart form-data with field name 'image' or as base64 string in JSON body"
-}
-```
-
-**404 Not Found:**
-```json
-{
-  "error": "Business card not found"
-}
-```
-
-**500 Server Error:**
-```json
-{
-  "error": "Error processing business card: [detailed error message]"
-}
-```
-
-### Server Logs for Debugging:
-The API provides detailed logging. Check your server console for:
-```
-🔍 Scan card request received
-📁 Files in request: ['image']
-📋 Data in request: {'user_id': '123'}
-🔧 Content-Type: multipart/form-data
-📷 Found image file: business_card.jpg, Size: 45678 bytes
-🚀 Starting Gemini AI extraction...
-📋 Gemini AI result: {'success': True, 'confidence': 95}
-💾 Saving business card with data: {...}
-✅ Serializer validation passed
-```
-
----
-
-## ⚡ **Performance & Features**
-
-### Scanning Performance:
-- **Speed**: 3-5 seconds average
-- **Success Rate**: 100%
-- **Accuracy**: 95%+ extraction accuracy
-- **Supported Formats**: JPG, PNG, WebP
-- **Max Image Size**: 10MB recommended
-
-### Features:
-- ✅ **Multi-format image support** (multipart, base64, alternative field names)
-- ✅ **Soft delete with trash/restore** functionality
-- ✅ **Advanced AI analysis** with context
-- ✅ **QR code scanning** support
-- ✅ **User management** system
-- ✅ **Email notifications** configuration
-- ✅ **Comprehensive error handling**
-- ✅ **Real-time processing** metrics
-
----
-
-## 🧪 **Quick Integration Test**
-
-```javascript
-// Complete test function for React Native
-async function testBCScannerAPI() {
-  const baseURL = 'http://your-server:8000/api';
-  
-  try {
-    // Test 1: List business cards
-    console.log('🧪 Testing GET /business-cards/');
-    const listResponse = await fetch(`${baseURL}/business-cards/`);
-    const cards = await listResponse.json();
-    console.log('✅ GET works:', cards.length, 'cards found');
-    
-    // Test 2: Check trash
-    console.log('🧪 Testing GET /business-cards/trash/');
-    const trashResponse = await fetch(`${baseURL}/business-cards/trash/`);
-    const trashData = await trashResponse.json();
-    console.log('✅ Trash works:', trashData.message);
-    
-    // Test 3: Delete a card (if any exist)
-    if (cards.length > 0) {
-      console.log('🧪 Testing DELETE /business-cards/{id}/');
-      const deleteResponse = await fetch(`${baseURL}/business-cards/${cards[0].id}/`, {
-        method: 'DELETE'
-      });
-      const deleteResult = await deleteResponse.json();
-      console.log('✅ DELETE works:', deleteResult.message);
-      
-      // Test 4: Restore the card
-      console.log('🧪 Testing POST /business-cards/{id}/restore/');
-      const restoreResponse = await fetch(`${baseURL}/business-cards/${cards[0].id}/restore/`, {
-        method: 'POST'
-      });
-      const restoreResult = await restoreResponse.json();
-      console.log('✅ Restore works:', restoreResult.message);
-    }
-    
-    console.log('🎉 All API tests passed!');
-    
-  } catch (error) {
-    console.error('❌ API Test Error:', error);
-  }
-}
-
-// Run the test
-testBCScannerAPI();
-```
-
----
-
-## 📞 **Support**
-
-If you encounter any issues:
-
-1. **Check server logs** for detailed error messages
-2. **Verify image format** (JPG/PNG recommended)
-3. **Test with provided examples** above
-4. **Ensure server is running** on correct port
-5. **Check network connectivity** between app and server
-
----
-
-**🎉 All React Native integration issues resolved! Your BC Scanner App is production-ready!** 

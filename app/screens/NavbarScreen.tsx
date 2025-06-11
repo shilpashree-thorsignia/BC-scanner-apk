@@ -30,6 +30,7 @@ const NavbarScreen: React.FC = () => {
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'today' | 'lastWeek' | 'thisMonth'>('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [showScanMenu, setShowScanMenu] = useState(false);
 
   const filterOptions = [
     { value: 'all', label: 'All Cards' },
@@ -213,8 +214,6 @@ const NavbarScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
 
-
-
         {/* Add Button */}
         <TouchableOpacity 
           style={[
@@ -280,6 +279,7 @@ const NavbarScreen: React.FC = () => {
             onPress={() => {
               setShowFilterDropdown(false);
               setShowSortDropdown(false);
+              setShowScanMenu(false);
             }}
           >
             <BusinessCardList
@@ -306,13 +306,38 @@ const NavbarScreen: React.FC = () => {
         {/* Floating Camera Button */}
         <TouchableOpacity 
           style={styles.floatingCameraButton}
-          onPress={() => {
-            setActiveTab('scan-card');
-            router.push('/screens/ScannerScreen' as any);
-          }}
+          onPress={() => setShowScanMenu(!showScanMenu)}
         >
           <Ionicons name="camera" size={24} color="#fff" />
         </TouchableOpacity>
+
+        {/* Scan Menu */}
+        {showScanMenu && (
+          <View style={styles.scanMenu}>
+            <TouchableOpacity 
+              style={styles.scanMenuItem}
+              onPress={() => {
+                setShowScanMenu(false);
+                setActiveTab('scan-card');
+                router.push('/screens/ScannerScreen' as any);
+              }}
+            >
+              <Ionicons name="camera-outline" size={20} color="#00A99D" />
+              <Text style={styles.scanMenuText}>Single Side Scan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.scanMenuItem}
+              onPress={() => {
+                setShowScanMenu(false);
+                setActiveTab('scan-card');
+                router.push('/screens/DualSideScannerScreen' as any);
+              }}
+            >
+              <Ionicons name="camera-reverse" size={20} color="#00A99D" />
+              <Text style={styles.scanMenuText}>Dual Side Scan</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         
         <NavigationBar />
         <HamburgerScreen 
@@ -541,6 +566,34 @@ const styles = StyleSheet.create({
   selectedDropdownItemText: {
     color: '#8ac041',
     fontWeight: '600',
+  },
+  scanMenu: {
+    position: 'absolute',
+    right: 20,
+    bottom: 170,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    minWidth: 160,
+  },
+  scanMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 8,
+  },
+  scanMenuText: {
+    color: '#00A99D',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
 

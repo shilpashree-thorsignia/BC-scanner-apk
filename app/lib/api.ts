@@ -123,6 +123,51 @@ export const scanQRCode = async (imageUri: string): Promise<BusinessCard> => {
   }
 };
 
+export const scanBusinessCardDualSide = async (frontImageUri: string, backImageUri: string): Promise<BusinessCard> => {
+  try {
+    const formData = new FormData();
+    
+    // Create file objects for both images
+    const frontFilename = frontImageUri.split('/').pop() || 'front_image.jpg';
+    const frontMatch = /\.(\w+)$/.exec(frontFilename);
+    const frontType = frontMatch ? `image/${frontMatch[1]}` : 'image/jpeg';
+    
+    const backFilename = backImageUri.split('/').pop() || 'back_image.jpg';
+    const backMatch = /\.(\w+)$/.exec(backFilename);
+    const backType = backMatch ? `image/${backMatch[1]}` : 'image/jpeg';
+    
+    formData.append('front_image', {
+      uri: frontImageUri,
+      name: frontFilename,
+      type: frontType,
+    } as any);
+    
+    formData.append('back_image', {
+      uri: backImageUri,
+      name: backFilename,
+      type: backType,
+    } as any);
+
+    const response = await fetch(`${API_BASE_URL}/business-cards/scan_card_dual_side/`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to scan business card (dual-side)');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Error scanning dual-side business card:', error);
+    throw error;
+  }
+};
+
 export const createBusinessCard = async (data: CreateCardData): Promise<BusinessCard> => {
   try {
     // Format data for backend (create endpoint uses camelCase jobTitle)

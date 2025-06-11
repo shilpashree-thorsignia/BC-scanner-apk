@@ -225,6 +225,139 @@ Rules:
                 'confidence': 0,
                 'method': 'gemini_error'
             }
+    
+    def extract_from_dual_images(self, front_image, back_image):
+        """Extract comprehensive data from both sides of a business card"""
+        start_time = time.time()
+        
+        # Try to reinitialize if not available
+        if not self.model:
+            if not self.initialize_gemini():
+                return {
+                    'success': False,
+                    'error': 'Gemini AI not available',
+                    'data': {},
+                    'processing_time': 0
+                }
+        
+        try:
+            # Optimize both images
+            if hasattr(front_image, 'width'):
+                front_img = front_image
+            else:
+                front_img = self.optimize_image(front_image)
+            
+            if hasattr(back_image, 'width'):
+                back_img = back_image
+            else:
+                back_img = self.optimize_image(back_image)
+            
+            # Comprehensive dual-side prompt
+            dual_prompt = """Analyze BOTH SIDES of this business card and extract ALL information comprehensively as JSON:
+
+{
+  "name": "",
+  "first_name": "",
+  "last_name": "",
+  "middle_name": "",
+  "email": "",
+  "email_secondary": "",
+  "mobile": "",
+  "mobile_secondary": "",
+  "landline": "",
+  "fax": "",
+  "company": "",
+  "company_full_name": "",
+  "department": "",
+  "job_title": "",
+  "job_title_secondary": "",
+  "website": "",
+  "website_secondary": "",
+  "linkedin": "",
+  "twitter": "",
+  "facebook": "",
+  "instagram": "",
+  "skype": "",
+  "address": "",
+  "street_address": "",
+  "city": "",
+  "state": "",
+  "postal_code": "",
+  "country": "",
+  "industry": "",
+  "services": "",
+  "specialization": "",
+  "certifications": "",
+  "awards": "",
+  "primary_language": "",
+  "secondary_language": "",
+  "timezone": "",
+  "qr_code_data": "",
+  "notes": "",
+  "scan_confidence": 95
+}
+
+FRONT SIDE: Analyze the first image (front side) - typically contains main contact info
+BACK SIDE: Analyze the second image (back side) - may contain additional services, certifications, social media
+
+Rules:
+- Combine information from both sides intelligently 
+- Extract ALL visible text and data
+- Look for social media handles/URLs on both sides
+- Extract certifications, awards, services from back side
+- Find QR codes, logos, additional contact info
+- For websites: add https:// if missing
+- Empty string if not found
+- Return JSON only, no explanation"""
+            
+            response = self.model.generate_content([dual_prompt, front_img, back_img])
+            processing_time = time.time() - start_time
+            
+            if response and response.text:
+                # Clean and parse response
+                response_text = response.text.strip()
+                if response_text.startswith('```json'):
+                    response_text = response_text.replace('```json', '').replace('```', '').strip()
+                elif response_text.startswith('```'):
+                    response_text = response_text.replace('```', '').strip()
+                
+                try:
+                    data = json.loads(response_text)
+                    return {
+                        'success': True,
+                        'data': data,
+                        'scan_method': 'gemini_dual_side_advanced',
+                        'processing_time': processing_time,
+                        'metadata': {
+                            'side_analyzed': 'both',
+                            'confidence_score': data.get('scan_confidence', 95),
+                            'text_quality': 'excellent'
+                        }
+                    }
+                except json.JSONDecodeError as e:
+                    return {
+                        'success': False,
+                        'error': f'Failed to parse JSON response: {str(e)}',
+                        'data': {},
+                        'processing_time': processing_time
+                    }
+            else:
+                return {
+                    'success': False,
+                    'error': 'No response from Gemini AI for dual-side scan',
+                    'data': {},
+                    'processing_time': processing_time
+                }
+                
+        except Exception as e:
+            processing_time = time.time() - start_time
+            logger.error(f"Dual-side extraction failed: {e}")
+            return {
+                'success': False,
+                'error': f'Dual-side extraction failed: {str(e)}',
+                'data': {},
+                'processing_time': processing_time
+            }
 
 class GeminiBusinessCardAnalyzer:
     """Advanced business card analyzer using Gemini AI (speed optimized)"""
