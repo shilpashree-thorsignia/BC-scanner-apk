@@ -1,20 +1,8 @@
-# Virtual environment
-venv/
-env/
-.venv/
-
-# Database files
-*.sqlite3
-db.sqlite3
-
-# Media files (uploaded content - should use cloud storage in production)
-media/
-
-# Python cache
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 build/
 develop-eggs/
@@ -31,22 +19,23 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Environment variables (use Vercel dashboard instead)
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
 
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -55,35 +44,50 @@ wheels/
 ehthumbs.db
 Thumbs.db
 
-# Logs
+# Django
 *.log
-logs/
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
 
-# Coverage reports
-htmlcov/
+# Media files (uploaded content)
+media/
+
+# Static files (will be collected during build)
+staticfiles/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Testing
 .coverage
-.coverage.*
-coverage.xml
-*.cover
-.hypothesis/
 .pytest_cache/
-
-# Jupyter Notebook
-.ipynb_checkpoints
+htmlcov/
 
 # Documentation
-docs/
+*.md
+!README.md
+
+# Scripts
+*.bat
+*.ps1
+*.sh
 
 # Test files
-tests/
 test_*.py
 *_test.py
+all_api_test.py
+speed_test.py
+check_email_config.py
 
-# Local development
-.local/
-.cache/
+# Deployment files
+deploy.sh
+start_server.*
 
-# Backup files
-*.bak
-*.backup
-*.old 
+# Build artifacts
+build.py
+init_db.py 
