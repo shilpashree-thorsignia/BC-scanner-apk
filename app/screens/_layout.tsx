@@ -72,12 +72,7 @@ export default function ScreenLayout() {
             presentation: 'modal',
           }}
         />
-        <Stack.Screen 
-          name="EditProfileScreen" 
-          options={{
-            headerShown: false,
-          }}
-        />
+
         <Stack.Screen 
           name="AddManually" 
           options={{ 
