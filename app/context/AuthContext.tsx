@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+import { ApiService } from '../lib/api';
 
 
 
@@ -48,6 +49,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadUserFromStorage = async () => {
     try {
       console.log('Loading user from storage...');
+      
+      // Test backend connectivity first
+      try {
+        await ApiService.healthCheck();
+        console.log('✅ Backend is accessible');
+      } catch (error) {
+        console.warn('⚠️ Backend health check failed, but continuing with app load:', error);
+      }
+      
       const userData = await AsyncStorage.getItem('user');
       if (userData) {
         const parsedUser = JSON.parse(userData);
@@ -82,6 +92,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('🔐 Attempting sign in to:', `${API_BASE_URL}/login/`);
+      
       const response = await fetch(`${API_BASE_URL}/login/`, {
         method: 'POST',
         headers: {
@@ -93,9 +105,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }),
       });
 
+      console.log('📡 Login response status:', response.status);
+      
       const data = await response.json();
+      console.log('📡 Login response data:', data);
       
       if (!response.ok) {
+        console.error('❌ Login failed:', data.error || 'Unknown error');
         throw new Error(data.error || 'Login failed');
       }
       
@@ -108,19 +124,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: data.phone
       };
       
+      console.log('✅ Login successful, setting user:', userData.email);
       setUser(userData);
       await saveUserToStorage(userData);
       
       return Promise.resolve();
     } catch (error) {
-      console.error('Sign in error:', error);
+      console.error('❌ Sign in error:', error);
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('🌐 Network error - check if backend is accessible');
+      }
       throw error;
     }
   };
 
   const requestRegistration = async (userData: SignUpData) => {
     try {
-      console.log('Requesting registration with OTP...');
+      console.log('📝 Requesting registration with OTP to:', `${API_BASE_URL}/register/request/`);
       const response = await fetch(`${API_BASE_URL}/register/request/`, {
         method: 'POST',
         headers: {
@@ -135,13 +156,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }),
       });
 
+      console.log('📡 Registration response status:', response.status);
       const data = await response.json();
+      console.log('📡 Registration response data:', data);
       
       if (!response.ok) {
+        console.error('❌ Registration request failed:', data.error || 'Unknown error');
         throw new Error(data.error || 'Registration request failed');
       }
 
-      console.log('Registration request successful:', data);
+      console.log('✅ Registration request successful:', data);
       
       // Return email and firstName for OTP verification screen
       return {
@@ -149,7 +173,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         firstName: userData.firstName
       };
     } catch (error) {
-      console.error('Registration request error:', error);
+      console.error('❌ Registration request error:', error);
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('🌐 Network error - check if backend is accessible');
+      }
       throw error;
     }
   };

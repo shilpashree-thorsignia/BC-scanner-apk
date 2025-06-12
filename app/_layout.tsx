@@ -42,17 +42,17 @@ function AppLayout() {
       segments[1] === 'TrashScreen'
     );
 
-    // If user is not authenticated and not in auth screens, redirect to welcome
-    if (!user && !inAuthScreens) {
-      console.log('User not authenticated, redirecting to welcome screen');
-      router.replace('/screens/WelcomeScreen');
-      return;
-    }
-
-    // If user is authenticated but in auth screens, redirect to main app
+    // Only redirect if user is authenticated and trying to access auth screens
     if (user && inAuthScreens) {
       console.log('User authenticated, redirecting to main app');
       router.replace('/screens/NavbarScreen');
+      return;
+    }
+
+    // Only redirect to welcome if user is not authenticated AND not in any auth screen AND not on root
+    if (!user && !inAuthScreens && segments.length > 0) {
+      console.log('User not authenticated, redirecting to welcome screen');
+      router.replace('/screens/WelcomeScreen');
       return;
     }
   }, [user, segments, loading, router]);

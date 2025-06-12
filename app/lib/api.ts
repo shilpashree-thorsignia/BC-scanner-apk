@@ -473,6 +473,70 @@ export const testEmailConfig = async (id: number): Promise<{ success: boolean; m
   }
 };
 
+export class ApiService {
+  /**
+   * Test backend connectivity
+   */
+  static async healthCheck(): Promise<{ status: string; message: string }> {
+    try {
+      console.log('🏥 Testing backend health at:', `${API_BASE_URL.replace('/api', '')}/health/`);
+      
+      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📡 Health check response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Health check failed with status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Backend health check successful:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Backend health check failed:', error);
+      
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('🌐 Network error - backend may not be accessible');
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Test API base endpoint
+   */
+  static async testApiBase(): Promise<any> {
+    try {
+      console.log('🧪 Testing API base at:', `${API_BASE_URL}/`);
+      
+      const response = await fetch(`${API_BASE_URL}/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📡 API base response status:', response.status);
+      
+      const data = await response.json();
+      console.log('✅ API base test successful:', data);
+      
+      return data;
+    } catch (error) {
+      console.error('❌ API base test failed:', error);
+      throw error;
+    }
+  }
+}
+
 const api = {
   scanBusinessCard,
   createBusinessCard,
