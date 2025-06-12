@@ -29,13 +29,7 @@ from django.conf import settings
 from .models import BusinessCard, UserProfile, EmailConfig, OTPVerification, PasswordResetOTP
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
 
-# Import database initialization
-try:
-    from init_database import init_for_request
-except ImportError:
-    # Fallback if init_database is not available
-    def init_for_request():
-        return True
+# Database initialization is handled by the health endpoint
 
 # Load environment variables early
 try:
@@ -287,11 +281,17 @@ class UserRegistrationRequestView(APIView):
     
     def post(self, request, format=None):
         try:
-            # Initialize database tables if needed
-            if not init_for_request():
-                return Response({
-                    'error': 'Database initialization failed'
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Simple database table check - if it fails, the health endpoint will handle migration
+            try:
+                from scanner.models import UserProfile
+                # Quick check if tables exist
+                UserProfile.objects.first()
+            except Exception as e:
+                if 'no such table' in str(e).lower():
+                    return Response({
+                        'error': 'Database not initialized. Please check the health endpoint to initialize the database.',
+                        'hint': 'Visit /health/ to auto-initialize the database'
+                    }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
             
             # Extract registration data
             email = request.data.get('email', '').strip().lower()
@@ -546,12 +546,6 @@ class UserLoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request, format=None):
-        # Initialize database tables if needed
-        if not init_for_request():
-            return Response({
-                'error': 'Database initialization failed'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
         email = request.data.get('email')
         password = request.data.get('password')
         

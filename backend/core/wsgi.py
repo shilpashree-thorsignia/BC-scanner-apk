@@ -1,8 +1,8 @@
 import os
 from django.core.wsgi import get_wsgi_application
 
-# Use production settings with PostgreSQL support
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.production_settings')
+# Use vercel settings that were working
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.vercel_settings')
 
 application = get_wsgi_application()
 

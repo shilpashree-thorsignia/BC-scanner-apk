@@ -9,45 +9,50 @@ import sys
 def health_check(request):
     """Simple health check endpoint for Vercel deployment"""
     try:
-        # Import database initialization function
-        try:
-            from init_database import ensure_database_initialized
-        except ImportError:
-            # Fallback to local implementation
-            from scanner.models import UserProfile
-            from django.core.management import call_command
-            
-            def ensure_database_initialized():
-                try:
-                    UserProfile.objects.first()
-                    return True
-                except Exception:
-                    try:
-                        call_command('migrate', verbosity=0, interactive=False)
-                        return True
-                    except Exception:
-                        return False
+        # Check if database tables exist and create them if needed
+        from scanner.models import UserProfile
+        from django.core.management import call_command
         
-        # Initialize database
-        if ensure_database_initialized():
-            # Test database connection
-            from scanner.models import UserProfile
+        database_status = 'unknown'
+        
+        # Try to query the database
+        try:
             UserProfile.objects.first()
-            
-            return JsonResponse({
-                'status': 'healthy',
-                'message': 'Backend API is running successfully - Database ready',
-                'version': '1.0.0',
-                'database': 'ready'
-            })
-        else:
-            return JsonResponse({
-                'status': 'warning',
-                'message': 'Backend API is running but database initialization failed',
-                'version': '1.0.0',
-                'database': 'error'
-            }, status=500)
-            
+            database_status = 'connected'
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'no such table' in error_msg or 'relation does not exist' in error_msg:
+                # Tables don't exist, run migrations
+                try:
+                    call_command('migrate', verbosity=0, interactive=False)
+                    # Test again after migration
+                    UserProfile.objects.first()
+                    database_status = 'initialized'
+                except Exception as migration_error:
+                    database_status = 'error'
+                    return JsonResponse({
+                        'status': 'error',
+                        'message': f'Database migration failed: {str(migration_error)}',
+                        'version': '1.0.0',
+                        'database': database_status
+                    }, status=500)
+            else:
+                # Other database error
+                database_status = 'error'
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Database error: {str(e)}',
+                    'version': '1.0.0',
+                    'database': database_status
+                }, status=500)
+        
+        return JsonResponse({
+            'status': 'healthy',
+            'message': 'Backend API is running successfully - Database ready',
+            'version': '1.0.0',
+            'database': database_status
+        })
+        
     except Exception as e:
         return JsonResponse({
             'status': 'error',
