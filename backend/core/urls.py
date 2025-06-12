@@ -8,11 +8,37 @@ import sys
 
 def health_check(request):
     """Simple health check endpoint for Vercel deployment"""
-    return JsonResponse({
-        'status': 'healthy',
-        'message': 'Backend API is running successfully',
-        'version': '1.0.0'
-    })
+    try:
+        # Check if database tables exist
+        from scanner.models import UserProfile
+        UserProfile.objects.first()  # This will fail if table doesn't exist
+        
+        return JsonResponse({
+            'status': 'healthy',
+            'message': 'Backend API is running successfully',
+            'version': '1.0.0',
+            'database': 'connected'
+        })
+    except Exception as e:
+        # Database tables don't exist, try to create them
+        try:
+            from django.core.management import call_command
+            call_command('migrate', verbosity=0, interactive=False)
+            
+            return JsonResponse({
+                'status': 'healthy',
+                'message': 'Backend API is running successfully - Database initialized',
+                'version': '1.0.0',
+                'database': 'initialized'
+            })
+        except Exception as migration_error:
+            return JsonResponse({
+                'status': 'warning',
+                'message': 'Backend API is running but database needs setup',
+                'version': '1.0.0',
+                'database': 'error',
+                'error': str(migration_error)
+            })
 
 def run_migrations(request):
     """Temporary endpoint to run database migrations"""
