@@ -9,36 +9,52 @@ import sys
 def health_check(request):
     """Simple health check endpoint for Vercel deployment"""
     try:
-        # Check if database tables exist
-        from scanner.models import UserProfile
-        UserProfile.objects.first()  # This will fail if table doesn't exist
-        
-        return JsonResponse({
-            'status': 'healthy',
-            'message': 'Backend API is running successfully',
-            'version': '1.0.0',
-            'database': 'connected'
-        })
-    except Exception as e:
-        # Database tables don't exist, try to create them
+        # Import database initialization function
         try:
+            from init_database import ensure_database_initialized
+        except ImportError:
+            # Fallback to local implementation
+            from scanner.models import UserProfile
             from django.core.management import call_command
-            call_command('migrate', verbosity=0, interactive=False)
+            
+            def ensure_database_initialized():
+                try:
+                    UserProfile.objects.first()
+                    return True
+                except Exception:
+                    try:
+                        call_command('migrate', verbosity=0, interactive=False)
+                        return True
+                    except Exception:
+                        return False
+        
+        # Initialize database
+        if ensure_database_initialized():
+            # Test database connection
+            from scanner.models import UserProfile
+            UserProfile.objects.first()
             
             return JsonResponse({
                 'status': 'healthy',
-                'message': 'Backend API is running successfully - Database initialized',
+                'message': 'Backend API is running successfully - Database ready',
                 'version': '1.0.0',
-                'database': 'initialized'
+                'database': 'ready'
             })
-        except Exception as migration_error:
+        else:
             return JsonResponse({
                 'status': 'warning',
-                'message': 'Backend API is running but database needs setup',
+                'message': 'Backend API is running but database initialization failed',
                 'version': '1.0.0',
-                'database': 'error',
-                'error': str(migration_error)
-            })
+                'database': 'error'
+            }, status=500)
+            
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Health check failed: {str(e)}',
+            'version': '1.0.0',
+            'database': 'error'
+        }, status=500)
 
 def run_migrations(request):
     """Temporary endpoint to run database migrations"""

@@ -29,6 +29,14 @@ from django.conf import settings
 from .models import BusinessCard, UserProfile, EmailConfig, OTPVerification, PasswordResetOTP
 from .serializers import BusinessCardSerializer, UserProfileSerializer, EmailConfigSerializer
 
+# Import database initialization
+try:
+    from init_database import init_for_request
+except ImportError:
+    # Fallback if init_database is not available
+    def init_for_request():
+        return True
+
 # Load environment variables early
 try:
     from dotenv import load_dotenv
@@ -279,8 +287,11 @@ class UserRegistrationRequestView(APIView):
     
     def post(self, request, format=None):
         try:
-            print(f"📝 Registration request received from {request.META.get('REMOTE_ADDR', 'unknown')}")
-            print(f"📋 Registration data: {dict(request.data)}")
+            # Initialize database tables if needed
+            if not init_for_request():
+                return Response({
+                    'error': 'Database initialization failed'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             # Extract registration data
             email = request.data.get('email', '').strip().lower()
@@ -535,10 +546,14 @@ class UserLoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request, format=None):
+        # Initialize database tables if needed
+        if not init_for_request():
+            return Response({
+                'error': 'Database initialization failed'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         email = request.data.get('email')
         password = request.data.get('password')
-        
-        print(f"🔐 Login attempt from {request.META.get('REMOTE_ADDR', 'unknown')} for email: {email}")
         
         # Clean up expired OTP records on login attempt
         try:
