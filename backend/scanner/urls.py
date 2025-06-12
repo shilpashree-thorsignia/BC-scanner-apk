@@ -13,6 +13,7 @@ from .views import (
     UserDetailView, 
     EmailConfigViewSet
 )
+from .test_email import test_email
 
 router = DefaultRouter()
 router.register(r'business-cards', BusinessCardViewSet)
@@ -33,4 +34,6 @@ urlpatterns = [
     # Login and user endpoints
     path('login/', UserLoginView.as_view(), name='login'),
     path('users/<int:user_id>/', UserDetailView.as_view(), name='user-detail'),
+    # Email testing endpoint
+    path('test-email/', test_email, name='test-email'),
 ]

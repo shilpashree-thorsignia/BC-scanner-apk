@@ -317,7 +317,6 @@ class UserRegistrationRequestView(APIView):
             email_result = OTPEmailService.send_otp_email(email, otp_record.otp_code, first_name)
             
             if email_result['success']:
-                print(f"✅ OTP email sent successfully to {email}")
                 return Response({
                     'message': 'Registration initiated. Please check your email for the verification code.',
                     'email': email,
@@ -326,7 +325,6 @@ class UserRegistrationRequestView(APIView):
             else:
                 # Clean up OTP record if email failed
                 otp_record.delete()
-                print(f"❌ Failed to send OTP email: {email_result['message']}")
                 return Response({
                     'error': f'Failed to send verification email: {email_result["message"]}'
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1589,9 +1587,7 @@ class OTPEmailService:
                 'sender_password': 'wfnkfipubofrbtnw'  # App password for knowledgeseeker238@gmail.com
             }
             
-            print(f"📧 [OTP] Sending OTP email TO: {email}")
-            print(f"📧 [OTP] From: {smtp_config['sender_email']}")
-            print(f"📧 [OTP] OTP Code: {otp_code}")
+            # Note: Email delivery in progress
             
             subject = f"🔐 Your OTP Code: {otp_code}"
             
@@ -1677,15 +1673,12 @@ class OTPEmailService:
             msg.attach(html_part)
             
             # Connect and send using Gmail SMTP
-            print(f"🔧 [OTP] Connecting to SMTP: {smtp_config['smtp_host']}:{smtp_config['smtp_port']}")
-            
             with smtplib.SMTP(smtp_config['smtp_host'], smtp_config['smtp_port'], timeout=30) as server:
                 server.starttls()  # Enable TLS for Gmail
                 server.login(smtp_config['sender_email'], smtp_config['sender_password'])
                 server.send_message(msg)
             
             success_message = f'OTP email sent successfully to {email}'
-            print(f"✅ [OTP] {success_message}")
             
             return {
                 'success': True,
@@ -1694,21 +1687,18 @@ class OTPEmailService:
             
         except smtplib.SMTPAuthenticationError as e:
             error_msg = f"OTP Email Authentication failed: {str(e)}"
-            print(f"❌ [OTP] {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
             }
         except smtplib.SMTPConnectError as e:
             error_msg = f"Cannot connect to Gmail SMTP server: {str(e)}"
-            print(f"❌ [OTP] {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
             }
         except Exception as e:
             error_msg = f"Failed to send OTP email: {str(e)}"
-            print(f"❌ [OTP] {error_msg}")
             return {
                 'success': False,
                 'message': error_msg
