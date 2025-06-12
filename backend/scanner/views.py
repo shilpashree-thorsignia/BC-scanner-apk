@@ -36,10 +36,13 @@ try:
     BASE_DIR = Path(__file__).resolve().parent.parent
     env_path = BASE_DIR / '.env'
     load_dotenv(env_path)
-    print(f"🔧 Views.py: Loading .env from: {env_path}")
-    print(f"🔑 Views.py: API Key loaded: {'Yes' if os.environ.get('GOOGLE_GEMINI_API_KEY') else 'No'}")
+    # Removed print statements for Vercel serverless compatibility
+    # print(f"🔧 Views.py: Loading .env from: {env_path}")
+    # print(f"🔑 Views.py: API Key loaded: {'Yes' if os.environ.get('GOOGLE_GEMINI_API_KEY') else 'No'}")
 except Exception as e:
-    print(f"❌ Views.py: Error loading .env: {e}")
+    # Removed print statement for Vercel serverless compatibility
+    # print(f"❌ Views.py: Error loading .env: {e}")
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +69,7 @@ def initialize_gemini_ai():
     try:
         api_key = os.environ.get('GOOGLE_GEMINI_API_KEY')
         if not api_key:
-            print(f"❌ GOOGLE_GEMINI_API_KEY not found in environment variables")
+            # print(f"❌ GOOGLE_GEMINI_API_KEY not found in environment variables")
             return False
         
         # Try to use the existing gemini_ocr.py first
@@ -75,11 +78,11 @@ def initialize_gemini_ai():
             gemini_ocr = GeminiOCR()
             gemini_analyzer = GeminiBusinessCardAnalyzer()
             GEMINI_AI_AVAILABLE = True
-            print(f"✅ Gemini AI OCR initialized successfully")
-            print(f"✅ Gemini AI Analyzer initialized successfully")
+            # print(f"✅ Gemini AI OCR initialized successfully")
+            # print(f"✅ Gemini AI Analyzer initialized successfully")
             return True
         except ImportError as e:
-            print(f"❌ Gemini AI OCR not available: {e}")
+            # print(f"❌ Gemini AI OCR not available: {e}")
             # Fallback to simple implementation
             import google.generativeai as genai
             genai.configure(api_key=api_key)
@@ -253,11 +256,11 @@ Rules:
             
             gemini_ocr = SimpleGeminiOCR()
             GEMINI_AI_AVAILABLE = True
-            print(f"✅ Simple Gemini AI OCR initialized successfully")
+            # print(f"✅ Simple Gemini AI OCR initialized successfully")
             return True
             
     except Exception as e:
-        print(f"❌ Error initializing Gemini AI: {e}")
+        # print(f"❌ Error initializing Gemini AI: {e}")
         GEMINI_AI_AVAILABLE = False
         gemini_ocr = None
         gemini_analyzer = None
