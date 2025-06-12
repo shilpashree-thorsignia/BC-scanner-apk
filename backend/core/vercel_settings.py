@@ -34,12 +34,24 @@ else:
 
 # Static files for Vercel
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+STATIC_ROOT = '/tmp/staticfiles'  # Use tmp directory for serverless
+STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 
-# Media files (for file uploads)
+# Disable static file collection in serverless environment
+# Static files should be served by Vercel directly
+STATICFILES_DIRS = []
+
+# Create staticfiles directory if it doesn't exist
+if not os.path.exists('/tmp/staticfiles'):
+    os.makedirs('/tmp/staticfiles', exist_ok=True)
+
+# Media files (for file uploads) - use tmp for serverless
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = '/tmp/media'
+
+# Create media directory if it doesn't exist
+if not os.path.exists('/tmp/media'):
+    os.makedirs('/tmp/media', exist_ok=True)
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = True
@@ -49,6 +61,11 @@ CORS_ALLOW_CREDENTIALS = True
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+
+# Disable some Django features that don't work well in serverless
+USE_TZ = True
+USE_I18N = True
+USE_L10N = True
 
 # Logging for Vercel
 LOGGING = {

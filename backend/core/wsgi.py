@@ -9,4 +9,8 @@ from django.core.wsgi import get_wsgi_application
 # Use Vercel settings for production deployment
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.vercel_settings')
 
-application = get_wsgi_application() 
+application = get_wsgi_application()
+
+# Vercel requires either 'app' or 'handler' variable
+app = application
+handler = application 
